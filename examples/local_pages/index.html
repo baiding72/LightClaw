@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LightClaw Demo Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 24px; color: #333; }
+        .nav { display: flex; gap: 10px; margin-top: 15px; }
+        .nav a { padding: 8px 16px; background: #e0e0e0; border-radius: 4px; text-decoration: none; color: #333; }
+        .nav a:hover { background: #d0d0d0; }
+        .nav a.active { background: #3b82f6; color: #fff; }
+        .content { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 18px; margin-bottom: 15px; color: #333; }
+        .stat { text-align: center; padding: 20px; }
+        .stat-value { font-size: 36px; font-weight: bold; color: #3b82f6; }
+        .stat-label { color: #666; margin-top: 5px; }
+        .item { padding: 10px; border-bottom: 1px solid #eee; }
+        .item:last-child { border-bottom: none; }
+        .item-title { font-weight: 500; }
+        .item-meta { font-size: 12px; color: #666; margin-top: 5px; }
+        .btn { padding: 8px 16px; background: #3b82f6; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #2563eb; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-group input, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .priority-high { color: #ef4444; }
+        .priority-medium { color: #f59e0b; }
+        .priority-low { color: #10b981; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-completed { background: #d1fae5; color: #065f46; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🦁 LightClaw Demo Dashboard</h1>
+            <p style="color: #666; margin-top: 5px;">本地演示页面 - Agent 可以操作这个页面</p>
+            <nav class="nav">
+                <a href="index.html" class="active">Dashboard</a>
+                <a href="notes.html">笔记</a>
+                <a href="todos.html">待办</a>
+                <a href="calendar.html">日历</a>
+                <a href="form.html">表单</a>
+            </nav>
+        </div>
+
+        <div class="content">
+            <div class="card">
+                <h2>📊 统计概览</h2>
+                <div class="stat">
+                    <div class="stat-value">12</div>
+                    <div class="stat-label">待办事项</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">5</div>
+                    <div class="stat-label">笔记</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">3</div>
+                    <div class="stat-label">日历事件</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📋 最近待办</h2>
+                <div id="recent-todos">
+                    <div class="item">
+                        <div class="item-title">完成项目报告</div>
+                        <div class="item-meta">
+                            <span class="priority-high">高优先级</span> · 截止: 2024-01-20
+                        </div>
+                    </div>
+                    <div class="item">
+                        <div class="item-title">准备会议材料</div>
+                        <div class="item-meta">
+                            <span class="priority-medium">中优先级</span> · 截止: 2024-01-18
+                        </div>
+                    </div>
+                    <div class="item">
+                        <div class="item-title">回复客户邮件</div>
+                        <div class="item-meta">
+                            <span class="priority-low">低优先级</span> · 截止: 2024-01-17
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📅 近期事件</h2>
+                <div id="recent-events">
+                    <div class="item">
+                        <div class="item-title">产品规划讨论会</div>
+                        <div class="item-meta">2024-01-20 14:00 · 会议室A</div>
+                    </div>
+                    <div class="item">
+                        <div class="item-title">团队周会</div>
+                        <div class="item-meta">2024-01-22 10:00 · 线上</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

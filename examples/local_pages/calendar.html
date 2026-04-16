@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日历 - LightClaw Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 24px; color: #333; }
+        .nav { display: flex; gap: 10px; margin-top: 15px; }
+        .nav a { padding: 8px 16px; background: #e0e0e0; border-radius: 4px; text-decoration: none; color: #333; }
+        .nav a:hover { background: #d0d0d0; }
+        .nav a.active { background: #3b82f6; color: #fff; }
+        .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .card h2 { font-size: 18px; margin-bottom: 15px; color: #333; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-row { display: flex; gap: 15px; }
+        .form-row .form-group { flex: 1; }
+        .btn { padding: 10px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #2563eb; }
+        .event-item { padding: 15px; border-left: 3px solid #3b82f6; margin-bottom: 15px; background: #f8fafc; border-radius: 0 4px 4px 0; }
+        .event-title { font-weight: 600; font-size: 16px; }
+        .event-time { color: #666; font-size: 14px; margin-top: 5px; }
+        .event-location { color: #888; font-size: 13px; margin-top: 3px; }
+        .event-description { color: #555; font-size: 14px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 日历</h1>
+            <nav class="nav">
+                <a href="index.html">Dashboard</a>
+                <a href="notes.html">笔记</a>
+                <a href="todos.html">待办</a>
+                <a href="calendar.html" class="active">日历</a>
+                <a href="form.html">表单</a>
+            </nav>
+        </div>
+
+        <div class="card">
+            <h2>新建事件</h2>
+            <form id="event-form">
+                <div class="form-group">
+                    <label for="event-title">事件标题</label>
+                    <input type="text" id="event-title" name="title" placeholder="输入事件标题" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="event-start">开始时间</label>
+                        <input type="datetime-local" id="event-start" name="start_time" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-end">结束时间</label>
+                        <input type="datetime-local" id="event-end" name="end_time" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="event-location">地点</label>
+                    <input type="text" id="event-location" name="location" placeholder="输入事件地点">
+                </div>
+                <div class="form-group">
+                    <label for="event-description">描述</label>
+                    <textarea id="event-description" name="description" rows="3" placeholder="输入事件描述"></textarea>
+                </div>
+                <button type="submit" class="btn" id="submit-event">创建事件</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>事件列表</h2>
+            <div id="events-list">
+                <div class="event-item">
+                    <div class="event-title">产品规划讨论会</div>
+                    <div class="event-time">2024-01-20 14:00 - 16:00</div>
+                    <div class="event-location">📍 会议室A</div>
+                    <div class="event-description">讨论下季度产品规划</div>
+                </div>
+                <div class="event-item">
+                    <div class="event-title">团队周会</div>
+                    <div class="event-time">2024-01-22 10:00 - 11:00</div>
+                    <div class="event-location">📍 线上</div>
+                    <div class="event-description">每周团队同步会议</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('event-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const title = document.getElementById('event-title').value;
+            const startTime = document.getElementById('event-start').value;
+            const endTime = document.getElementById('event-end').value;
+            const location = document.getElementById('event-location').value;
+            const description = document.getElementById('event-description').value;
+
+            const formatTime = (dt) => {
+                return dt.replace('T', ' ').substring(0, 16);
+            };
+
+            const div = document.createElement('div');
+            div.className = 'event-item';
+            div.innerHTML = `
+                <div class="event-title">${title}</div>
+                <div class="event-time">${formatTime(startTime)} - ${formatTime(endTime)}</div>
+                ${location ? `<div class="event-location">📍 ${location}</div>` : ''}
+                ${description ? `<div class="event-description">${description}</div>` : ''}
+            `;
+
+            document.getElementById('events-list').prepend(div);
+            this.reset();
+        });
+    </script>
+</body>
+</html>
