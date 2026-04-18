@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_max_tokens: int = 4096
     llm_temperature: float = 0.7
+    llm_retry_count: int = 3
+    llm_retry_backoff_ms: int = 1000
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./data/lightclaw.db"

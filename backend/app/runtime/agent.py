@@ -126,6 +126,19 @@ class Agent:
                     plan.get("steps", []),
                     plan.get("expected_result", ""),
                 )
+                if plan.get("error"):
+                    self.state.add_error("planning_error", plan["error"], step=0)
+                    self.state.mark_failed(f"Planning failed: {plan['error']}")
+                    logger.error(f"Initial planning failed: {plan['error']}")
+                    final_result = self._build_final_result()
+                    await self.gateway.log_task_end(
+                        task_id=self.task_id,
+                        final_outcome=self.state.final_outcome or "planning_error",
+                        total_steps=self.state.current_step,
+                        total_tokens=self.state.total_tokens,
+                        error_message=plan["error"],
+                    )
+                    return final_result
                 logger.info(f"Initial plan: {plan}")
 
             # 主循环
@@ -153,6 +166,12 @@ class Agent:
                     tool_args=decision.get("tool_args"),
                     response=decision.get("response"),
                 )
+
+                if decision.get("error"):
+                    self.state.add_error("planning_error", decision["error"])
+                    self.state.mark_failed(f"Decision failed: {decision['error']}")
+                    logger.error(f"Decision failed: {decision['error']}")
+                    break
 
                 # 如果没有工具调用，可能是完成了
                 if not decision.get("tool_name"):
@@ -328,6 +347,7 @@ class Agent:
             "retry_count": self.state.retry_count,
             "successful_recoveries": self.state.successful_recoveries,
             "errors": self.state.errors,
+            "error": self.state.errors[-1]["message"] if self.state.errors else None,
             "current_goal": self.state.current_goal,
             "current_subgoal": self.state.current_subgoal,
             "active_checkpoint": self.state.active_checkpoint,

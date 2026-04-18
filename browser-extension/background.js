@@ -1,5 +1,22 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || message.type !== 'LIGHTCLAW_GET_BROWSER_CONTEXT') {
+  if (!message || !message.type) {
+    return false
+  }
+
+  if (message.type === 'LIGHTCLAW_EXTENSION_HEALTH') {
+    sendResponse({
+      ok: true,
+      payload: {
+        extension_version: chrome.runtime.getManifest().version,
+        runtime_available: true,
+        browser_family: 'chromium',
+        permissions: ['tabs'],
+      },
+    })
+    return false
+  }
+
+  if (message.type !== 'LIGHTCLAW_GET_BROWSER_CONTEXT') {
     return false
   }
 

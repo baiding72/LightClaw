@@ -3,6 +3,7 @@
 """
 from fastapi import APIRouter
 
+from app.llm import ChatMessage, get_llm_adapter
 from app.tools import get_tool_registry
 
 router = APIRouter(tags=["health"])
@@ -15,6 +16,31 @@ async def health_check() -> dict:
         "status": "healthy",
         "service": "lightclaw",
     }
+
+
+@router.get("/health/llm")
+async def llm_health_check() -> dict:
+    """LLM 健康检查"""
+    llm = get_llm_adapter()
+
+    try:
+        response = await llm.chat(
+            [ChatMessage(role="user", content="Reply with OK only.")],
+            max_tokens=8,
+            temperature=0,
+        )
+        return {
+            "status": "healthy",
+            "model": llm.model_name,
+            "response": response.content.strip(),
+            "latency_ms": response.latency_ms,
+        }
+    except Exception as exc:
+        return {
+            "status": "unhealthy",
+            "model": llm.model_name,
+            "error": str(exc),
+        }
 
 
 @router.get("/tools")

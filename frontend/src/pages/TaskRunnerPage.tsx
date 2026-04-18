@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import axios from 'axios'
 import { api } from '../lib/api'
 import {
+  checkBrowserExtensionHealth,
   type BrowserContextPayload,
   fetchBrowserContextFromExtension,
 } from '../lib/browserExtension'
@@ -113,6 +115,14 @@ interface TodoItem {
   updated_at: string
 }
 
+interface LLMHealth {
+  status: 'healthy' | 'unhealthy'
+  model?: string
+  response?: string
+  latency_ms?: number
+  error?: string
+}
+
 export default function TaskRunnerPage() {
   const [builtInTasks, setBuiltInTasks] = useState<BuiltInTask[]>([])
   const [selectedTask, setSelectedTask] = useState('')
@@ -126,19 +136,14 @@ export default function TaskRunnerPage() {
   const [browserContext, setBrowserContext] = useState<BrowserContextPayload | null>(null)
   const [selectedTabId, setSelectedTabId] = useState<number | null>(null)
   const [browserStatus, setBrowserStatus] = useState('Browser extension not connected yet.')
+  const [llmStatus, setLlmStatus] = useState('Checking LLM health...')
   const [loadingBrowserContext, setLoadingBrowserContext] = useState(false)
-  const [jobContext, setJobContext] = useState({
-    target_company: '',
-    target_role: '',
-    role_keywords: 'software engineer intern',
-    candidate_name: '',
-    candidate_email: '',
-    resume_path: '',
-  })
 
   useEffect(() => {
     void loadBuiltInTasks()
     void loadArtifacts()
+    void probeBrowserExtension()
+    void probeLlmHealth()
   }, [])
 
   const loadBuiltInTasks = async () => {
@@ -260,18 +265,59 @@ export default function TaskRunnerPage() {
     }
   })
 
+  const formatApiError = (error: unknown) => {
+    if (axios.isAxiosError(error)) {
+      const payload = error.response?.data
+      if (typeof payload === 'string' && payload.trim()) {
+        return payload
+      }
+      if (payload && typeof payload === 'object') {
+        const record = payload as Record<string, unknown>
+        const detail = record.detail
+        const message = record.error
+        if (typeof detail === 'string' && detail.trim()) return detail
+        if (typeof message === 'string' && message.trim()) return message
+      }
+      return error.message
+    }
+    if (error instanceof Error) return error.message
+    return String(error)
+  }
+
+  const probeBrowserExtension = async () => {
+    try {
+      await checkBrowserExtensionHealth()
+      setBrowserStatus('☑️ Browser extension connected')
+    } catch (error) {
+      const message = formatApiError(error)
+      setBrowserStatus(`Browser extension issue: ${message}`)
+    }
+  }
+
+  const probeLlmHealth = async () => {
+    try {
+      const response = await api.get<LLMHealth>('/health/llm')
+      setLlmStatus(response.data.status === 'healthy' ? '☑️ LLM connected' : `LLM issue: ${response.data.error || 'unknown error'}`)
+    } catch (error) {
+      const message = formatApiError(error)
+      setLlmStatus(`LLM issue: ${message}`)
+    }
+  }
+
   const refreshBrowserContext = async () => {
     setLoadingBrowserContext(true)
     try {
+      await checkBrowserExtensionHealth()
       const extensionContext = await fetchBrowserContextFromExtension()
       setBrowserContext(extensionContext)
       setSelectedTabId(extensionContext.selected_tab.tab_id)
-      setBrowserStatus(`Connected to browser plugin at ${new Date(extensionContext.captured_at).toLocaleTimeString()}.`)
+      setBrowserStatus('☑️ Browser extension connected')
       setLogs((prev) => [...prev, `Browser context synced: ${extensionContext.selected_tab.title || extensionContext.selected_tab.url}`])
-    } catch (error: any) {
+    } catch (error) {
+      const message = formatApiError(error)
       console.error('Failed to sync browser context:', error)
-      setBrowserStatus(error.message || 'Failed to connect to browser extension.')
-      setLogs((prev) => [...prev, `Browser context sync failed: ${error.message || 'unknown error'}`])
+      setBrowserStatus(message)
+      setLogs((prev) => [...prev, `Browser context sync failed: ${message}`])
     } finally {
       setLoadingBrowserContext(false)
     }
@@ -294,25 +340,6 @@ export default function TaskRunnerPage() {
     }
 
     try {
-      const scenarioContextPayload = jobContext.target_company || jobContext.target_role
-        ? {
-            target_company: jobContext.target_company || undefined,
-            target_role: jobContext.target_role || undefined,
-            search_preferences: {
-              role_keywords: jobContext.role_keywords
-                ? jobContext.role_keywords.split(',').map((item) => item.trim()).filter(Boolean)
-                : [],
-              target_companies: jobContext.target_company ? [jobContext.target_company] : [],
-              internship_only: true,
-            },
-            candidate_profile: {
-              full_name: jobContext.candidate_name || undefined,
-              email: jobContext.candidate_email || undefined,
-              resume_path: jobContext.resume_path || undefined,
-            },
-          }
-        : undefined
-
       let taskId = activeTaskId
       if (!isResumeRun) {
         const createResponse = await api.post('/tasks', {
@@ -328,8 +355,6 @@ export default function TaskRunnerPage() {
                 tabs: availableTabs,
               }
             : undefined,
-          scenario_type: scenarioContextPayload ? 'job_application' : undefined,
-          scenario_context: scenarioContextPayload,
         })
 
         taskId = createResponse.data.task_id
@@ -348,7 +373,6 @@ export default function TaskRunnerPage() {
               tabs: availableTabs,
             }
           : undefined,
-        scenario_context: scenarioContextPayload,
       }
 
       if (selectedBrowserTab) {
@@ -369,15 +393,16 @@ export default function TaskRunnerPage() {
         `Steps executed: ${runResponse.data.total_steps}`,
       ])
       await loadArtifacts()
-    } catch (error: any) {
+    } catch (error) {
+      const message = formatApiError(error)
       console.error('Failed to run task:', error)
-      setLogs((prev) => [...prev, `Error: ${error.message}`])
+      setLogs((prev) => [...prev, `Error: ${message}`])
       setResult({
         success: false,
         task_id: '',
         outcome: 'error',
         total_steps: 0,
-        error: error.message,
+        error: message,
       })
     } finally {
       setRunning(false)
@@ -450,7 +475,10 @@ export default function TaskRunnerPage() {
 	            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Browser Context</h3>
-                <p className="mt-1 text-sm text-gray-600">{browserStatus}</p>
+                <div className="mt-1 space-y-1 text-sm text-gray-600">
+                  <div>{browserStatus}</div>
+                  <div>{llmStatus}</div>
+                </div>
               </div>
               <button
                 onClick={() => void refreshBrowserContext()}
@@ -487,21 +515,7 @@ export default function TaskRunnerPage() {
                     <div className="text-sm text-gray-500">
                       Load the unpacked extension, open LightClaw in the browser, then click "Sync Tabs".
                     </div>
-                  ) : (
-                    availableTabs.map((tab) => (
-                      <div
-                        key={tab.tab_id}
-                        className={`rounded border px-3 py-2 text-sm ${
-                          selectedBrowserTab?.tab_id === tab.tab_id
-                            ? 'border-sky-300 bg-sky-50 text-sky-900'
-                            : 'border-gray-200 bg-gray-50 text-gray-700'
-                        }`}
-                      >
-                        <div className="font-medium">{tab.title || 'Untitled Tab'}</div>
-                        <div className="mt-1 break-all text-xs text-gray-500">{tab.url}</div>
-                      </div>
-                    ))
-                  )}
+                  ) : null}
                 </div>
               </div>
 
@@ -535,32 +549,6 @@ export default function TaskRunnerPage() {
                   </div>
                 )}
               </div>
-	            </div>
-	          </div>
-
-	          <div className="bg-white rounded-lg shadow p-6">
-	            <h3 className="text-lg font-medium text-gray-900">Job Context</h3>
-	            <p className="mt-1 text-sm text-gray-600">
-	              Optional scenario context for internship search, application review, and form filling.
-	            </p>
-	            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-	              {[
-	                ['target_company', 'Target Company'],
-	                ['target_role', 'Target Role'],
-	                ['role_keywords', 'Role Keywords'],
-	                ['candidate_name', 'Candidate Name'],
-	                ['candidate_email', 'Candidate Email'],
-	                ['resume_path', 'Resume Path'],
-	              ].map(([key, label]) => (
-	                <div key={key}>
-	                  <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-	                  <input
-	                    value={jobContext[key as keyof typeof jobContext]}
-	                    onChange={(e) => setJobContext((prev) => ({ ...prev, [key]: e.target.value }))}
-	                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-	                  />
-	                </div>
-	              ))}
 	            </div>
 	          </div>
 

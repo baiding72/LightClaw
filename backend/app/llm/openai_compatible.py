@@ -3,6 +3,7 @@ OpenAI Compatible LLM Adapter
 
 支持 OpenAI API 和兼容的 API（如 GLM、DeepSeek 等）
 """
+import asyncio
 import time
 from typing import Any, Optional
 
@@ -29,6 +30,8 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
         self._base_url = base_url or settings.llm_base_url
         self._max_tokens = settings.llm_max_tokens
         self._temperature = settings.llm_temperature
+        self._retry_count = max(1, settings.llm_retry_count)
+        self._retry_backoff_ms = max(0, settings.llm_retry_backoff_ms)
 
         # 初始化客户端
         self._client = AsyncOpenAI(
@@ -80,50 +83,65 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
             if tool_choice:
                 params["tool_choice"] = tool_choice
 
-        try:
-            response = await self._client.chat.completions.create(**params)
+        last_error: Optional[Exception] = None
+        for attempt in range(1, self._retry_count + 1):
+            try:
+                response = await self._client.chat.completions.create(**params)
 
-            latency_ms = int((time.time() - start_time) * 1000)
+                latency_ms = int((time.time() - start_time) * 1000)
 
-            # 提取使用统计
-            usage = LLMUsage(
-                prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
-                completion_tokens=response.usage.completion_tokens if response.usage else 0,
-                total_tokens=response.usage.total_tokens if response.usage else 0,
-            )
+                # 提取使用统计
+                usage = LLMUsage(
+                    prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+                    completion_tokens=response.usage.completion_tokens if response.usage else 0,
+                    total_tokens=response.usage.total_tokens if response.usage else 0,
+                )
 
-            # 提取内容
-            content = response.choices[0].message.content or ""
+                # 提取内容
+                content = response.choices[0].message.content or ""
 
-            # 提取工具调用
-            tool_calls = None
-            if response.choices[0].message.tool_calls:
-                tool_calls = [
-                    {
-                        "id": tc.id,
-                        "type": tc.type,
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in response.choices[0].message.tool_calls
-                ]
+                # 提取工具调用
+                tool_calls = None
+                if response.choices[0].message.tool_calls:
+                    tool_calls = [
+                        {
+                            "id": tc.id,
+                            "type": tc.type,
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in response.choices[0].message.tool_calls
+                    ]
 
-            return LLMResponse(
-                content=content,
-                usage=usage,
-                latency_ms=latency_ms,
-                model=response.model,
-                finish_reason=response.choices[0].finish_reason,
-                raw_response={
-                    "tool_calls": tool_calls,
-                },
-            )
+                return LLMResponse(
+                    content=content,
+                    usage=usage,
+                    latency_ms=latency_ms,
+                    model=response.model,
+                    finish_reason=response.choices[0].finish_reason,
+                    raw_response={
+                        "tool_calls": tool_calls,
+                    },
+                )
+            except Exception as e:
+                last_error = e
+                logger.error(
+                    "LLM chat error on attempt %s/%s: %s: %s",
+                    attempt,
+                    self._retry_count,
+                    type(e).__name__,
+                    e,
+                )
+                if attempt >= self._retry_count:
+                    break
+                await asyncio.sleep((self._retry_backoff_ms / 1000) * attempt)
 
-        except Exception as e:
-            logger.error(f"LLM chat error: {e}")
-            raise
+        raise RuntimeError(
+            f"LLM request failed after {self._retry_count} attempts: "
+            f"{type(last_error).__name__ if last_error else 'UnknownError'}: {last_error}"
+        )
 
     async def embed(self, text: str) -> list[float]:
         """生成文本嵌入向量"""
