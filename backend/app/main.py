@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
 from app.core.config import get_settings
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
 
     # 注册路由
     app.include_router(api_router, prefix="/api")
+    app.mount("/artifacts/screenshots", StaticFiles(directory=settings.screenshots_dir), name="screenshots")
 
     return app
 

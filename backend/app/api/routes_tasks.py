@@ -65,6 +65,7 @@ async def run_task(
     result = await service.run_task(
         task_id,
         browser_context=run_request.browser_context if run_request else None,
+        scenario_context=run_request.scenario_context if run_request else None,
     )
     return result
 

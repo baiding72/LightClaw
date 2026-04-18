@@ -4,10 +4,12 @@ import TaskRunnerPage from './pages/TaskRunnerPage'
 import MemoryPage from './pages/MemoryPage'
 import DataPoolPage from './pages/DataPoolPage'
 import EvaluationPage from './pages/EvaluationPage'
+import ApplicationsPage from './pages/ApplicationsPage'
 
 function App() {
   const navItems = [
     { to: '/', label: 'Dashboard', icon: '📊' },
+    { to: '/applications', label: 'Applications', icon: '🧭' },
     { to: '/tasks', label: 'Task Runner', icon: '🤖' },
     { to: '/memory', label: 'Memory', icon: '🧠' },
     { to: '/datapool', label: 'DataPool', icon: '📦' },
@@ -59,6 +61,7 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/applications" element={<ApplicationsPage />} />
           <Route path="/tasks" element={<TaskRunnerPage />} />
           <Route path="/memory" element={<MemoryPage />} />
           <Route path="/datapool" element={<DataPoolPage />} />

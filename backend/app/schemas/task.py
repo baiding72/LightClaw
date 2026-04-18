@@ -7,6 +7,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 from app.core.enums import TaskCategory, TaskDifficulty, TaskStatus
+from app.schemas.job_application import JobApplicationContext
 
 
 class BrowserTabContext(BaseModel):
@@ -35,6 +36,9 @@ class TaskCreate(BaseModel):
     allowed_tools: Optional[list[str]] = None
     target_state: Optional[dict[str, Any]] = None
     validation_rules: Optional[dict[str, Any]] = None
+    browser_context: Optional[BrowserContext] = None
+    scenario_type: Optional[str] = None
+    scenario_context: Optional[JobApplicationContext] = None
 
 
 class TaskUpdate(BaseModel):
@@ -46,6 +50,7 @@ class TaskUpdate(BaseModel):
 class TaskRunRequest(BaseModel):
     """运行任务请求"""
     browser_context: Optional[BrowserContext] = None
+    scenario_context: Optional[JobApplicationContext] = None
 
 
 class TaskResponse(BaseModel):
@@ -58,6 +63,9 @@ class TaskResponse(BaseModel):
     allowed_tools: list[str]
     target_state: Optional[dict[str, Any]] = None
     validation_rules: Optional[dict[str, Any]] = None
+    browser_context: Optional[BrowserContext] = None
+    scenario_type: Optional[str] = None
+    scenario_context: Optional[JobApplicationContext] = None
     result: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime

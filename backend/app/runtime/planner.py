@@ -124,6 +124,53 @@ class Planner:
 
         return result
 
+    def _build_candidate_tools(
+        self,
+        state: AgentState,
+        available_tools: Optional[list[str]] = None,
+    ) -> list[dict[str, Any]]:
+        tool_names = available_tools or self.tool_registry.list_tools()
+        candidate_names: list[str] = []
+
+        if not state.current_url:
+            for name in ["search_web", "open_url", "read_file"]:
+                if name in tool_names:
+                    candidate_names.append(name)
+        else:
+            for name in ["read_page", "click", "type_text", "select_option", "take_screenshot", "scroll"]:
+                if name in tool_names:
+                    candidate_names.append(name)
+
+        for name in tool_names:
+            if name not in candidate_names:
+                candidate_names.append(name)
+            if len(candidate_names) >= 5:
+                break
+
+        candidates = []
+        for name in candidate_names[:5]:
+            tool = self.tool_registry.get(name)
+            if not tool:
+                continue
+            if name == "search_web":
+                reason = "当前还没有稳定页面上下文，优先检索入口。"
+            elif name == "open_url":
+                reason = "需要进入具体网页才能继续任务。"
+            elif name == "read_page":
+                reason = "当前已有页面，优先读取正文或字段。"
+            elif name in {"click", "type_text", "select_option"}:
+                reason = "当前任务涉及页面交互或表单推进。"
+            elif name == "take_screenshot":
+                reason = "需要保留界面证据或辅助观察。"
+            else:
+                reason = f"{tool.description}"
+            candidates.append({
+                "name": name,
+                "category": tool.category,
+                "reason": reason,
+            })
+        return candidates
+
     async def decide_next_action(
         self,
         state: AgentState,
@@ -143,6 +190,8 @@ class Planner:
         """
         # 获取工具 schema
         tools = self.tool_registry.get_schemas(available_tools)
+        candidate_tools = self._build_candidate_tools(state, available_tools)
+        state.set_candidate_tools(candidate_tools)
 
         # 构建系统提示
         from app.llm.prompts import SYSTEM_PROMPT
@@ -189,6 +238,7 @@ class Planner:
 
                 return {
                     "thought": thought,
+                    "candidate_tools": candidate_tools,
                     "tool_name": tool_name,
                     "tool_args": tool_args,
                 }
@@ -196,6 +246,7 @@ class Planner:
                 # 没有工具调用，可能是总结或询问
                 return {
                     "thought": thought,
+                    "candidate_tools": candidate_tools,
                     "tool_name": None,
                     "tool_args": None,
                     "response": thought,
@@ -205,6 +256,7 @@ class Planner:
             logger.error(f"Error deciding next action: {e}")
             return {
                 "thought": f"决策出错: {str(e)}",
+                "candidate_tools": candidate_tools if 'candidate_tools' in locals() else [],
                 "tool_name": None,
                 "tool_args": None,
                 "error": str(e),

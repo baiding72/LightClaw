@@ -124,6 +124,8 @@ class Observer:
             state.current_url = result["url"]
         if "title" in result:
             state.current_page_title = result["title"]
+        if "source_context" in result:
+            state.current_page_source = result["source_context"]
 
         # 记录最后结果
         state.last_tool_result = result

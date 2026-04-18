@@ -22,6 +22,22 @@ interface ToolCall {
   timestamp: string
 }
 
+interface GuiAction {
+  step: number
+  action: string
+  target: string
+  success: boolean
+  details?: Record<string, unknown> | null
+  timestamp: string
+}
+
+interface TaskError {
+  step: number
+  type: string
+  message: string
+  timestamp: string
+}
+
 interface TaskResult {
   success: boolean
   task_id: string
@@ -34,9 +50,14 @@ interface TaskResult {
     current_step: number
     total_tokens: number
     total_latency_ms: number
+    current_url?: string
+    current_page_title?: string
+    current_page_source?: Record<string, unknown> | null
     thoughts: string[]
     observations: string[]
     tool_calls: ToolCall[]
+    gui_actions?: GuiAction[]
+    errors?: TaskError[]
     browser_context?: BrowserContextPayload
   }
 }
@@ -73,6 +94,14 @@ export default function TaskRunnerPage() {
   const [selectedTabId, setSelectedTabId] = useState<number | null>(null)
   const [browserStatus, setBrowserStatus] = useState('Browser extension not connected yet.')
   const [loadingBrowserContext, setLoadingBrowserContext] = useState(false)
+  const [jobContext, setJobContext] = useState({
+    target_company: '',
+    target_role: '',
+    role_keywords: 'software engineer intern',
+    candidate_name: '',
+    candidate_email: '',
+    resume_path: '',
+  })
 
   useEffect(() => {
     void loadBuiltInTasks()
@@ -103,12 +132,65 @@ export default function TaskRunnerPage() {
 
   const selectedTaskInfo = builtInTasks.find((task) => task.task_id === selectedTask)
   const toolCalls = result?.state?.tool_calls ?? []
+  const guiActions = result?.state?.gui_actions ?? []
+  const taskErrors = result?.state?.errors ?? []
   const availableTabs = browserContext?.tabs ?? []
   const selectedBrowserTab = (
     availableTabs.find((tab) => tab.tab_id === selectedTabId)
     ?? browserContext?.selected_tab
     ?? null
   )
+  const formatJson = (value: unknown) => JSON.stringify(value, null, 2)
+  const formatValue = (value: unknown) => {
+    if (typeof value === 'string') return value
+    return JSON.stringify(value)
+  }
+  const toScreenshotUrl = (path: string) => {
+    const normalizedPath = path.replace(/\\/g, '/')
+    const fileName = normalizedPath.split('/').pop()
+    return fileName ? `${api.defaults.baseURL?.replace(/\/api$/, '') || ''}/artifacts/screenshots/${fileName}` : null
+  }
+  const summarizeToolCall = (call: ToolCall) => {
+    switch (call.tool) {
+      case 'open_url':
+        return call.result?.url ? `Opened ${String(call.result.url)}` : 'Opened page'
+      case 'read_page':
+        return call.result?.length ? `Read ${String(call.result.length)} chars from page` : 'Read page content'
+      case 'click':
+        return call.args?.selector ? `Clicked ${String(call.args.selector)}` : 'Clicked element'
+      case 'type_text':
+        return call.args?.selector
+          ? `Typed into ${String(call.args.selector)}`
+          : 'Typed text'
+      case 'select_option':
+        return call.args?.selector
+          ? `Selected ${String(call.args.option)} in ${String(call.args.selector)}`
+          : 'Selected option'
+      case 'take_screenshot':
+        return call.result?.path ? 'Captured screenshot' : 'Took screenshot'
+      default:
+        return call.tool
+    }
+  }
+
+  const browserTools = new Set(['open_url', 'read_page', 'click', 'type_text', 'select_option', 'take_screenshot', 'scroll'])
+
+  const executionSteps = toolCalls.map((call) => {
+    const screenshotPath =
+      typeof call.result?.path === 'string' && call.tool === 'take_screenshot'
+        ? call.result.path
+        : null
+    const screenshotUrl = screenshotPath ? toScreenshotUrl(screenshotPath) : null
+    const sourceContext = call.result?.source_context
+
+    return {
+      ...call,
+      isBrowserTool: browserTools.has(call.tool),
+      screenshotPath,
+      screenshotUrl,
+      sourceContext,
+    }
+  })
 
   const refreshBrowserContext = async () => {
     setLoadingBrowserContext(true)
@@ -139,26 +221,56 @@ export default function TaskRunnerPage() {
     setLogs(['Starting task...'])
 
     try {
+      const scenarioContextPayload = jobContext.target_company || jobContext.target_role
+        ? {
+            target_company: jobContext.target_company || undefined,
+            target_role: jobContext.target_role || undefined,
+            search_preferences: {
+              role_keywords: jobContext.role_keywords
+                ? jobContext.role_keywords.split(',').map((item) => item.trim()).filter(Boolean)
+                : [],
+              target_companies: jobContext.target_company ? [jobContext.target_company] : [],
+              internship_only: true,
+            },
+            candidate_profile: {
+              full_name: jobContext.candidate_name || undefined,
+              email: jobContext.candidate_email || undefined,
+              resume_path: jobContext.resume_path || undefined,
+            },
+          }
+        : undefined
+
       const createResponse = await api.post('/tasks', {
         instruction,
         category: selectedTaskInfo?.category || 'multi_step',
         difficulty: selectedTaskInfo?.difficulty || 'medium',
         allowed_tools: selectedTaskInfo?.allowed_tools,
+        browser_context: selectedBrowserTab
+          ? {
+              source: 'browser_extension',
+              captured_at: browserContext?.captured_at || new Date().toISOString(),
+              selected_tab: selectedBrowserTab,
+              tabs: availableTabs,
+            }
+          : undefined,
+        scenario_type: scenarioContextPayload ? 'job_application' : undefined,
+        scenario_context: scenarioContextPayload,
       })
 
       const taskId = createResponse.data.task_id
       setLogs((prev) => [...prev, `Task created: ${taskId}`, 'Running task...'])
 
-      const runPayload = selectedBrowserTab
-        ? {
-            browser_context: {
+      const runPayload = {
+        browser_context: selectedBrowserTab
+          ? {
               source: 'browser_extension',
               captured_at: browserContext?.captured_at || new Date().toISOString(),
               selected_tab: selectedBrowserTab,
               tabs: availableTabs,
-            },
-          }
-        : {}
+            }
+          : undefined,
+        scenario_context: scenarioContextPayload,
+      }
 
       if (selectedBrowserTab) {
         setLogs((prev) => [
@@ -191,8 +303,6 @@ export default function TaskRunnerPage() {
       setRunning(false)
     }
   }
-
-  const formatJson = (value: unknown) => JSON.stringify(value, null, 2)
 
   return (
     <div className="space-y-6">
@@ -256,8 +366,8 @@ export default function TaskRunnerPage() {
             </button>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+	          <div className="bg-white rounded-lg shadow p-6">
+	            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Browser Context</h3>
                 <p className="mt-1 text-sm text-gray-600">{browserStatus}</p>
@@ -345,10 +455,36 @@ export default function TaskRunnerPage() {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
+	            </div>
+	          </div>
 
-          {selectedTaskInfo ? (
+	          <div className="bg-white rounded-lg shadow p-6">
+	            <h3 className="text-lg font-medium text-gray-900">Job Context</h3>
+	            <p className="mt-1 text-sm text-gray-600">
+	              Optional scenario context for internship search, application review, and form filling.
+	            </p>
+	            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+	              {[
+	                ['target_company', 'Target Company'],
+	                ['target_role', 'Target Role'],
+	                ['role_keywords', 'Role Keywords'],
+	                ['candidate_name', 'Candidate Name'],
+	                ['candidate_email', 'Candidate Email'],
+	                ['resume_path', 'Resume Path'],
+	              ].map(([key, label]) => (
+	                <div key={key}>
+	                  <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+	                  <input
+	                    value={jobContext[key as keyof typeof jobContext]}
+	                    onChange={(e) => setJobContext((prev) => ({ ...prev, [key]: e.target.value }))}
+	                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+	                  />
+	                </div>
+	              ))}
+	            </div>
+	          </div>
+
+	          {selectedTaskInfo ? (
             <div className="bg-sky-50 rounded-lg p-4 border border-sky-100">
               <div className="text-sm text-sky-900 font-medium">Selected Task</div>
               <div className="mt-2 text-sm text-sky-800">{selectedTaskInfo.instruction}</div>
@@ -421,11 +557,81 @@ export default function TaskRunnerPage() {
             </div>
           ) : null}
 
-          {toolCalls.length > 0 ? (
+          {executionSteps.length > 0 ? (
             <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Tool Timeline</h3>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">Execution Panel</h3>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Every tool call, browser action, page target, and screenshot from the run.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                  <span className="rounded border bg-gray-50 px-2 py-1">
+                    {executionSteps.length} tool calls
+                  </span>
+                  <span className="rounded border bg-gray-50 px-2 py-1">
+                    {guiActions.length} GUI actions
+                  </span>
+                  <span className="rounded border bg-gray-50 px-2 py-1">
+                    {executionSteps.filter((call) => call.screenshotPath).length} screenshots
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
+                <div className="rounded border bg-gray-50 p-4">
+                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Runtime Page</div>
+                  <div className="mt-2 text-sm text-gray-900">
+                    {result?.state?.current_page_title || result?.state?.current_url || 'No page captured'}
+                  </div>
+                  {result?.state?.current_url ? (
+                    <a
+                      href={result.state.current_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 block break-all text-sm text-sky-700 hover:text-sky-900"
+                    >
+                      {result.state.current_url}
+                    </a>
+                  ) : null}
+                  {result?.state?.current_page_source ? (
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      {Object.entries(result.state.current_page_source).slice(0, 5).map(([key, value]) => (
+                        <span key={key} className="rounded border bg-white px-2 py-1 text-gray-700">
+                          {key}: {formatValue(value)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="rounded border bg-gray-50 p-4">
+                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">GUI Signals</div>
+                  <div className="mt-3 space-y-2">
+                    {guiActions.length === 0 ? (
+                      <div className="text-sm text-gray-500">No GUI actions recorded in this run.</div>
+                    ) : (
+                      guiActions.map((action, index) => (
+                        <div key={`${action.step}-${action.action}-${index}`} className="rounded border bg-white px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-medium text-gray-900">{action.action}</span>
+                            <span className={`rounded px-2 py-1 text-xs ${action.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {action.success ? 'success' : 'failed'}
+                            </span>
+                          </div>
+                          <div className="mt-1 break-all text-xs text-gray-500">
+                            step {action.step}{action.target ? ` · ${action.target}` : ''}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-4">
-                {toolCalls.map((call) => (
+                {executionSteps.map((call) => (
                   <div key={`${call.step}-${call.tool}`} className="border rounded-lg p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -435,13 +641,58 @@ export default function TaskRunnerPage() {
                         <div>
                           <div className="font-medium text-gray-900">{call.tool}</div>
                           <div className="text-xs text-gray-500">{new Date(call.timestamp).toLocaleString()}</div>
+                          <div className="mt-1 text-sm text-gray-600">{summarizeToolCall(call)}</div>
                         </div>
                       </div>
-                      <span className={`text-xs font-medium px-2 py-1 rounded ${call.error ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {call.error ? 'failed' : 'success'}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {call.isBrowserTool ? (
+                          <span className="text-xs font-medium px-2 py-1 rounded bg-sky-100 text-sky-700">
+                            browser
+                          </span>
+                        ) : null}
+                        <span className={`text-xs font-medium px-2 py-1 rounded ${call.error ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                          {call.error ? 'failed' : 'success'}
+                        </span>
+                      </div>
                     </div>
 
+                    {call.sourceContext && typeof call.sourceContext === 'object' ? (
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                        {Object.entries(call.sourceContext).slice(0, 6).map(([key, value]) => (
+                          <span key={key} className="rounded border bg-sky-50 px-2 py-1 text-sky-800">
+                            {key}: {formatValue(value)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {call.screenshotUrl ? (
+                      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div>
+                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">Arguments</div>
+                            <pre className="overflow-x-auto rounded border bg-gray-50 p-3 text-xs text-gray-700">{formatJson(call.args)}</pre>
+                          </div>
+                          <div>
+                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">Result</div>
+                            <pre className="overflow-x-auto rounded border bg-gray-50 p-3 text-xs text-gray-700">
+                              {call.error || formatJson(call.result)}
+                            </pre>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">Screenshot</div>
+                          <a href={call.screenshotUrl} target="_blank" rel="noreferrer" className="block">
+                            <img
+                              src={call.screenshotUrl}
+                              alt={`Screenshot for step ${call.step}`}
+                              className="h-40 w-full rounded border object-cover"
+                            />
+                          </a>
+                          <div className="mt-2 break-all text-xs text-gray-500">{call.screenshotPath}</div>
+                        </div>
+                      </div>
+                    ) : (
                     <div className="mt-4 grid gap-4 lg:grid-cols-2">
                       <div>
                         <div className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">Arguments</div>
@@ -454,6 +705,7 @@ export default function TaskRunnerPage() {
                         </pre>
                       </div>
                     </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -520,15 +772,37 @@ export default function TaskRunnerPage() {
         </div>
       </div>
 
-      {result?.state?.observations?.length ? (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Observations</h3>
-          <div className="space-y-2">
-            {result.state.observations.map((observation, index) => (
-              <div key={`${index}-${observation}`} className="rounded border bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                {observation}
-              </div>
-            ))}
+      {result?.state?.observations?.length || taskErrors.length ? (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Observations</h3>
+            <div className="space-y-2">
+              {result?.state?.observations?.map((observation, index) => (
+                <div key={`${index}-${observation}`} className="rounded border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  {observation}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Errors</h3>
+            <div className="space-y-2">
+              {taskErrors.length === 0 ? (
+                <div className="rounded border bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                  No runtime errors recorded.
+                </div>
+              ) : (
+                taskErrors.map((error, index) => (
+                  <div key={`${error.timestamp}-${index}`} className="rounded border border-red-100 bg-red-50 px-3 py-2 text-sm">
+                    <div className="font-medium text-red-800">{error.type}</div>
+                    <div className="mt-1 text-red-700">{error.message}</div>
+                    <div className="mt-2 text-xs text-red-500">
+                      step {error.step} · {new Date(error.timestamp).toLocaleString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       ) : null}

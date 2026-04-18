@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import TaskCategory, TaskDifficulty, TaskStatus
 from app.db.models import TaskModel
+from app.scenarios import build_job_application_instruction
+from app.schemas.job_application import JobApplicationContext
 from app.schemas.task import (
     BrowserContext,
     TaskCreate,
@@ -38,6 +40,9 @@ class TaskService:
             allowed_tools=task_create.allowed_tools or [],
             target_state=task_create.target_state,
             validation_rules=task_create.validation_rules,
+            browser_context=task_create.browser_context.model_dump(mode="json") if task_create.browser_context else None,
+            scenario_type=task_create.scenario_type,
+            scenario_context=task_create.scenario_context.model_dump(mode="json") if task_create.scenario_context else None,
             status=TaskStatus.PENDING.value,
         )
 
@@ -129,6 +134,7 @@ class TaskService:
         self,
         task_id: str,
         browser_context: Optional[BrowserContext] = None,
+        scenario_context: Optional[JobApplicationContext] = None,
     ) -> dict:
         """运行任务"""
         task = await self.get_task(task_id)
@@ -148,14 +154,21 @@ class TaskService:
             instruction = built_in_task.instruction if built_in_task else task.instruction
             allowed_tools = built_in_task.allowed_tools if built_in_task else task.allowed_tools
 
+            effective_browser_context = browser_context
+            if effective_browser_context is None and task.browser_context:
+                effective_browser_context = BrowserContext(**task.browser_context)
+            effective_scenario_context = scenario_context
+            if effective_scenario_context is None and task.scenario_context:
+                effective_scenario_context = JobApplicationContext(**task.scenario_context)
+
             enriched_instruction = instruction
             serialized_browser_context = None
-            if browser_context:
-                selected_tab = browser_context.selected_tab
-                serialized_browser_context = browser_context.model_dump(mode="json")
+            if effective_browser_context:
+                selected_tab = effective_browser_context.selected_tab
+                serialized_browser_context = effective_browser_context.model_dump(mode="json")
                 other_tabs = [
                     f"- {tab.title or tab.url} ({tab.url})"
-                    for tab in browser_context.tabs
+                    for tab in effective_browser_context.tabs
                     if tab.tab_id != selected_tab.tab_id
                 ][:5]
                 browser_lines = [
@@ -168,6 +181,15 @@ class TaskService:
                     browser_lines.extend(other_tabs)
                 enriched_instruction = f"{instruction}\n\n" + "\n".join(browser_lines)
 
+            serialized_scenario_context = None
+            if effective_scenario_context:
+                serialized_scenario_context = effective_scenario_context.model_dump(mode="json")
+                if task.scenario_type == "job_application":
+                    enriched_instruction = build_job_application_instruction(
+                        enriched_instruction,
+                        serialized_scenario_context,
+                    )
+
             agent = Agent(task_id=task_id)
             result = await agent.run(
                 instruction=enriched_instruction,
@@ -175,6 +197,9 @@ class TaskService:
                 task_definition=built_in_task,
                 browser_context=serialized_browser_context,
             )
+            if serialized_scenario_context:
+                result["scenario_type"] = task.scenario_type
+                result["scenario_context"] = serialized_scenario_context
 
             # 更新任务状态
             status = TaskStatus.COMPLETED if result.get("success") else TaskStatus.FAILED
@@ -205,6 +230,9 @@ class TaskService:
             allowed_tools=task.allowed_tools or [],
             target_state=task.target_state,
             validation_rules=task.validation_rules,
+            browser_context=BrowserContext(**task.browser_context) if task.browser_context else None,
+            scenario_type=task.scenario_type,
+            scenario_context=JobApplicationContext(**task.scenario_context) if task.scenario_context else None,
             result=task.result,
             created_at=task.created_at,
             updated_at=task.updated_at,

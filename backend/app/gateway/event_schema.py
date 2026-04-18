@@ -96,6 +96,7 @@ class TaskEvent:
     difficulty: Optional[str] = None
     allowed_tools: list[str] = field(default_factory=list)
     target_state: Optional[dict[str, Any]] = None
+    browser_context: Optional[dict[str, Any]] = None
 
     # 结果
     final_outcome: Optional[str] = None
@@ -121,6 +122,7 @@ class TaskEvent:
             "difficulty": self.difficulty,
             "allowed_tools": self.allowed_tools,
             "target_state": self.target_state,
+            "browser_context": self.browser_context,
             "final_outcome": self.final_outcome,
             "total_steps": self.total_steps,
             "total_tokens": self.total_tokens,

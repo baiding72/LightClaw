@@ -40,6 +40,7 @@ class GatewayCollector:
         category: Optional[str] = None,
         difficulty: Optional[str] = None,
         target_state: Optional[dict[str, Any]] = None,
+        browser_context: Optional[dict[str, Any]] = None,
     ) -> str:
         """记录任务开始"""
         event_id = str(uuid.uuid4())
@@ -52,6 +53,7 @@ class GatewayCollector:
             difficulty=difficulty,
             allowed_tools=allowed_tools,
             target_state=target_state,
+            browser_context=browser_context,
         )
 
         self.current_task_id = task_id

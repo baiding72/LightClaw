@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     headless_browser: bool = True
     browser_timeout: int = 30000  # ms
 
+    # Search
+    search_provider: str = "duckduckgo"
+    search_timeout: int = 10
+    search_max_results: int = 5
+    search_retry_count: int = 3
+
     # Data paths
     data_dir: str = "./data"
     trajectories_dir: str = "./data/trajectories"

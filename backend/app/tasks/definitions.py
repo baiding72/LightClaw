@@ -394,12 +394,66 @@ MULTI_STEP_TASKS = [
 ]
 
 
+JOB_APPLICATION_TASKS = [
+    TaskDefinition(
+        task_id="job_001",
+        instruction="搜索目标公司的实习岗位官网入口，整理岗位名称、地点、申请入口，并写入笔记。",
+        category=TaskCategory.MULTI_STEP,
+        difficulty=TaskDifficulty.MEDIUM,
+        allowed_tools=["search_web", "open_url", "read_page", "create_apple_note"],
+        target_state={
+            "note_created": True,
+            "job_sources_found": True,
+        },
+        validation_rules={
+            "check_note_exists": True,
+        },
+        description="搜索并整理官网实习岗位入口",
+        tags=["job-application", "search", "internship"],
+    ),
+    TaskDefinition(
+        task_id="job_002",
+        instruction="打开目标公司的官网申请页面，阅读表单要求，整理必填字段和缺失信息。",
+        category=TaskCategory.WEB_FORM,
+        difficulty=TaskDifficulty.MEDIUM,
+        allowed_tools=["open_url", "read_page", "create_apple_note"],
+        target_state={
+            "note_created": True,
+            "required_fields_identified": True,
+        },
+        validation_rules={
+            "check_note_exists": True,
+        },
+        description="解析官网申请表单字段",
+        tags=["job-application", "form", "analysis"],
+    ),
+    TaskDefinition(
+        task_id="job_003",
+        instruction="在招聘官网中填写候选人基础信息，截图保存当前进度，然后创建一条后续跟进提醒。",
+        category=TaskCategory.MULTI_STEP,
+        difficulty=TaskDifficulty.HARD,
+        allowed_tools=["open_url", "type_text", "select_option", "click", "take_screenshot", "create_apple_reminder"],
+        target_state={
+            "screenshot_taken": True,
+            "todo_created": True,
+        },
+        validation_rules={
+            "check_screenshot_exists": True,
+            "check_todo_exists": True,
+        },
+        description="执行官网投递并记录跟进",
+        tags=["job-application", "form", "submit-flow"],
+    ),
+]
+
+
 # 所有任务集合
 ALL_TASKS = (
     INFO_EXTRACTION_TASKS
     + TODO_CALENDAR_TASKS
     + WEB_FORM_TASKS
     + MULTI_STEP_TASKS
+    + JOB_APPLICATION_TASKS
 )
 
 

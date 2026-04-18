@@ -79,6 +79,10 @@ class Agent:
             max_steps=self.settings.max_steps,
             browser_context=browser_context,
         )
+        if browser_context and browser_context.get("selected_tab"):
+            selected_tab = browser_context["selected_tab"]
+            self.state.current_url = selected_tab.get("url")
+            self.state.current_page_title = selected_tab.get("title")
 
         logger.info(f"Starting agent run: {self.task_id}, instruction: {instruction[:100]}")
 
@@ -95,6 +99,7 @@ class Agent:
             task_id=self.task_id,
             instruction=instruction,
             allowed_tools=allowed_tools,
+            browser_context=browser_context,
         )
 
         try:

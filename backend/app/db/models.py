@@ -23,6 +23,9 @@ class TaskModel(Base):
     allowed_tools: Mapped[list] = mapped_column(JSON, default=list)
     target_state: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     validation_rules: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    browser_context: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    scenario_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    scenario_context: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
@@ -137,5 +140,23 @@ class CalendarEventModel(Base):
     start_time: Mapped[datetime] = mapped_column(DateTime)
     end_time: Mapped[datetime] = mapped_column(DateTime)
     location: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class ApplicationModel(Base):
+    """求职申请跟踪模型"""
+    __tablename__ = "applications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    application_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    company_name: Mapped[str] = mapped_column(String(200), index=True)
+    role_title: Mapped[str] = mapped_column(String(200), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="discovered", index=True)
+    source_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    location: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    next_action: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    application_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
