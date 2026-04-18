@@ -142,7 +142,12 @@ class TaskService:
             return {"success": False, "error": "Task not found"}
 
         # 更新状态为运行中
-        await self.update_task(task_id, TaskUpdate(status=TaskStatus.RUNNING))
+        runtime_status = TaskStatus.RUNNING
+        if task.status == TaskStatus.WAITING_FOR_USER.value:
+            runtime_status = TaskStatus.RUNNING
+        elif task.status == TaskStatus.PENDING.value:
+            runtime_status = TaskStatus.PLANNING
+        await self.update_task(task_id, TaskUpdate(status=runtime_status))
 
         try:
             # 运行 Agent
@@ -191,18 +196,29 @@ class TaskService:
                     )
 
             agent = Agent(task_id=task_id)
+            resume_state = None
+            if task.status == TaskStatus.WAITING_FOR_USER.value and task.result:
+                resume_state = task.result.get("state")
             result = await agent.run(
                 instruction=enriched_instruction,
                 allowed_tools=allowed_tools,
                 task_definition=built_in_task,
                 browser_context=serialized_browser_context,
+                scenario_type=task.scenario_type,
+                scenario_context=serialized_scenario_context,
+                resume_state=resume_state,
             )
             if serialized_scenario_context:
                 result["scenario_type"] = task.scenario_type
                 result["scenario_context"] = serialized_scenario_context
 
             # 更新任务状态
-            status = TaskStatus.COMPLETED if result.get("success") else TaskStatus.FAILED
+            if result.get("paused"):
+                status = TaskStatus.WAITING_FOR_USER
+            elif result.get("lifecycle_status") == "recovering":
+                status = TaskStatus.RECOVERING
+            else:
+                status = TaskStatus.COMPLETED if result.get("success") else TaskStatus.FAILED
             await self.update_task(task_id, TaskUpdate(
                 status=status,
                 result=result,

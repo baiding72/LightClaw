@@ -40,8 +40,13 @@ interface TaskError {
 
 interface TaskResult {
   success: boolean
+  paused?: boolean
   task_id: string
   outcome: string
+  lifecycle_status?: string
+  current_goal?: string
+  current_subgoal?: string
+  active_checkpoint?: Record<string, unknown> | null
   total_steps: number
   total_tokens?: number
   total_latency_ms?: number
@@ -53,6 +58,33 @@ interface TaskResult {
     current_url?: string
     current_page_title?: string
     current_page_source?: Record<string, unknown> | null
+    current_goal?: string
+    current_subgoal?: string
+    lifecycle_status?: string
+    expected_result?: string
+    plan_steps?: string[]
+    memory_summary?: Record<string, unknown>
+    candidate_tools?: Array<{ name: string; category: string; reason: string }>
+    current_decision?: {
+      chosen_tool?: string | null
+      chosen_tool_reason?: string | null
+      tool_args?: Record<string, unknown> | null
+      response?: string | null
+      candidate_tools?: Array<{ name: string; category: string; reason: string }>
+    } | null
+    recovery_trace?: Array<{
+      step: number
+      tool_name: string
+      error_type: string
+      error_message: string
+      suggested_action?: string | null
+      suggested_fix?: unknown
+      recovery_plan?: Record<string, unknown> | null
+      timestamp: string
+    }>
+    checkpoints?: Array<Record<string, unknown>>
+    active_checkpoint?: Record<string, unknown> | null
+    environment?: Record<string, unknown>
     thoughts: string[]
     observations: string[]
     tool_calls: ToolCall[]
@@ -86,6 +118,7 @@ export default function TaskRunnerPage() {
   const [selectedTask, setSelectedTask] = useState('')
   const [customInstruction, setCustomInstruction] = useState('')
   const [running, setRunning] = useState(false)
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [result, setResult] = useState<TaskResult | null>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [recentNotes, setRecentNotes] = useState<NoteItem[]>([])
@@ -134,7 +167,33 @@ export default function TaskRunnerPage() {
   const toolCalls = result?.state?.tool_calls ?? []
   const guiActions = result?.state?.gui_actions ?? []
   const taskErrors = result?.state?.errors ?? []
+  const currentDecision = result?.state?.current_decision
+  const candidateTools = currentDecision?.candidate_tools ?? result?.state?.candidate_tools ?? []
+  const recoveryTrace = result?.state?.recovery_trace ?? []
+  const activeCheckpoint = result?.state?.active_checkpoint ?? result?.active_checkpoint ?? null
+  const checkpointTitle = activeCheckpoint
+    ? String(activeCheckpoint['title'] ?? activeCheckpoint['type'] ?? 'Pending checkpoint')
+    : null
+  const checkpointDescription = activeCheckpoint
+    ? String(activeCheckpoint['description'] ?? '')
+    : null
+  const checkpointResumeHint = activeCheckpoint
+    ? String(activeCheckpoint['resume_hint'] ?? 'Run the task again after handling this checkpoint.')
+    : null
+  const currentGoal = result?.current_goal
+    ?? result?.state?.current_goal
+    ?? customInstruction
+    ?? selectedTaskInfo?.instruction
+    ?? 'No goal captured yet.'
+  const currentSubgoal = result?.current_subgoal
+    ?? result?.state?.current_subgoal
+    ?? 'Not set yet'
+  const latestObservation = result?.state?.observations?.length
+    ? result.state.observations[result.state.observations.length - 1]
+    : 'No observation yet.'
+  const memorySummary = result?.state?.memory_summary ?? null
   const availableTabs = browserContext?.tabs ?? []
+  const canResume = Boolean(result?.paused && activeTaskId)
   const selectedBrowserTab = (
     availableTabs.find((tab) => tab.tab_id === selectedTabId)
     ?? browserContext?.selected_tab
@@ -171,6 +230,15 @@ export default function TaskRunnerPage() {
       default:
         return call.tool
     }
+  }
+  const formatLifecycleLabel = (value?: string | null) =>
+    (value || 'unknown').replace(/_/g, ' ')
+  const lifecycleTone = (value?: string | null) => {
+    if (value === 'completed') return 'bg-green-100 text-green-700'
+    if (value === 'failed') return 'bg-red-100 text-red-700'
+    if (value === 'waiting_for_user') return 'bg-amber-100 text-amber-700'
+    if (value === 'recovering') return 'bg-orange-100 text-orange-700'
+    return 'bg-slate-100 text-slate-700'
   }
 
   const browserTools = new Set(['open_url', 'read_page', 'click', 'type_text', 'select_option', 'take_screenshot', 'scroll'])
@@ -216,9 +284,14 @@ export default function TaskRunnerPage() {
       return
     }
 
+    const isResumeRun = canResume
     setRunning(true)
-    setResult(null)
-    setLogs(['Starting task...'])
+    if (!isResumeRun) {
+      setResult(null)
+      setLogs(['Starting task...'])
+    } else {
+      setLogs((prev) => [...prev, `Resuming task: ${activeTaskId}`])
+    }
 
     try {
       const scenarioContextPayload = jobContext.target_company || jobContext.target_role
@@ -240,25 +313,31 @@ export default function TaskRunnerPage() {
           }
         : undefined
 
-      const createResponse = await api.post('/tasks', {
-        instruction,
-        category: selectedTaskInfo?.category || 'multi_step',
-        difficulty: selectedTaskInfo?.difficulty || 'medium',
-        allowed_tools: selectedTaskInfo?.allowed_tools,
-        browser_context: selectedBrowserTab
-          ? {
-              source: 'browser_extension',
-              captured_at: browserContext?.captured_at || new Date().toISOString(),
-              selected_tab: selectedBrowserTab,
-              tabs: availableTabs,
-            }
-          : undefined,
-        scenario_type: scenarioContextPayload ? 'job_application' : undefined,
-        scenario_context: scenarioContextPayload,
-      })
+      let taskId = activeTaskId
+      if (!isResumeRun) {
+        const createResponse = await api.post('/tasks', {
+          instruction,
+          category: selectedTaskInfo?.category || 'multi_step',
+          difficulty: selectedTaskInfo?.difficulty || 'medium',
+          allowed_tools: selectedTaskInfo?.allowed_tools,
+          browser_context: selectedBrowserTab
+            ? {
+                source: 'browser_extension',
+                captured_at: browserContext?.captured_at || new Date().toISOString(),
+                selected_tab: selectedBrowserTab,
+                tabs: availableTabs,
+              }
+            : undefined,
+          scenario_type: scenarioContextPayload ? 'job_application' : undefined,
+          scenario_context: scenarioContextPayload,
+        })
 
-      const taskId = createResponse.data.task_id
-      setLogs((prev) => [...prev, `Task created: ${taskId}`, 'Running task...'])
+        taskId = createResponse.data.task_id
+        setActiveTaskId(taskId)
+        setLogs((prev) => [...prev, `Task created: ${taskId}`, 'Running task...'])
+      } else {
+        setLogs((prev) => [...prev, 'Running resumed task...'])
+      }
 
       const runPayload = {
         browser_context: selectedBrowserTab
@@ -283,9 +362,10 @@ export default function TaskRunnerPage() {
       const runResponse = await api.post<TaskResult>(`/tasks/${taskId}/run`, runPayload)
 
       setResult(runResponse.data)
+      setActiveTaskId(runResponse.data.task_id)
       setLogs((prev) => [
         ...prev,
-        `Task finished: ${runResponse.data.success ? 'success' : 'failed'}`,
+        `Task finished: ${runResponse.data.paused ? 'paused' : runResponse.data.success ? 'success' : 'failed'}`,
         `Steps executed: ${runResponse.data.total_steps}`,
       ])
       await loadArtifacts()
@@ -362,7 +442,7 @@ export default function TaskRunnerPage() {
               disabled={running}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {running ? 'Running...' : 'Run Task'}
+              {running ? 'Running...' : canResume ? 'Resume Task' : 'Run Task'}
             </button>
           </div>
 
@@ -511,26 +591,32 @@ export default function TaskRunnerPage() {
             </div>
           </div>
 
-          {result ? (
-            <div className={`rounded-lg p-6 border ${result.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-              <div className="flex flex-wrap items-start justify-between gap-4">
+	          {result ? (
+	            <div className={`rounded-lg p-6 border ${result.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+	              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <h3 className={`text-lg font-medium ${result.success ? 'text-green-800' : 'text-red-800'}`}>
-                    {result.success ? 'Task Completed' : 'Task Failed'}
-                  </h3>
+	                  <h3 className={`text-lg font-medium ${result.success ? 'text-green-800' : result.paused ? 'text-amber-800' : 'text-red-800'}`}>
+	                    {result.success ? 'Task Completed' : result.paused ? 'Task Paused' : 'Task Failed'}
+	                  </h3>
                   <div className="mt-2 text-sm text-gray-700">
                     Task ID: <span className="font-mono">{result.task_id}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div className="rounded border bg-white px-3 py-2">
-                    <div className="text-gray-500">Outcome</div>
-                    <div className="font-medium text-gray-900">{result.outcome}</div>
-                  </div>
-                  <div className="rounded border bg-white px-3 py-2">
-                    <div className="text-gray-500">Steps</div>
-                    <div className="font-medium text-gray-900">{result.total_steps}</div>
-                  </div>
+	                <div className="grid grid-cols-4 gap-3 text-sm">
+	                  <div className="rounded border bg-white px-3 py-2">
+	                    <div className="text-gray-500">Outcome</div>
+	                    <div className="font-medium text-gray-900">{result.outcome}</div>
+	                  </div>
+	                  <div className="rounded border bg-white px-3 py-2">
+	                    <div className="text-gray-500">Lifecycle</div>
+	                    <div className={`inline-flex rounded px-2 py-1 text-xs font-medium ${lifecycleTone(result.lifecycle_status || result.state?.lifecycle_status)}`}>
+	                      {formatLifecycleLabel(result.lifecycle_status || result.state?.lifecycle_status)}
+	                    </div>
+	                  </div>
+	                  <div className="rounded border bg-white px-3 py-2">
+	                    <div className="text-gray-500">Steps</div>
+	                    <div className="font-medium text-gray-900">{result.total_steps}</div>
+	                  </div>
                   <div className="rounded border bg-white px-3 py-2">
                     <div className="text-gray-500">Latency</div>
                     <div className="font-medium text-gray-900">
@@ -540,14 +626,29 @@ export default function TaskRunnerPage() {
                 </div>
               </div>
 
-              {result.error ? (
+	              {result.error ? (
                 <div className="mt-4 text-sm text-red-700">
                   <strong>Error:</strong> {result.error}
                 </div>
-              ) : null}
+	              ) : null}
 
-              {result.state?.thoughts?.length ? (
-                <div className="mt-4">
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded border bg-white p-4">
+                        <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Current Goal</div>
+                      <div className="mt-2 text-sm text-gray-900 whitespace-pre-wrap">
+                        {currentGoal}
+                      </div>
+                    </div>
+                    <div className="rounded border bg-white p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Current Subgoal</div>
+                      <div className="mt-2 text-sm text-gray-900 whitespace-pre-wrap">
+                        {currentSubgoal}
+                      </div>
+                    </div>
+                  </div>
+
+	              {result.state?.thoughts?.length ? (
+	                <div className="mt-4">
                   <div className="text-sm font-medium text-gray-700 mb-2">Final Thought</div>
                   <div className="rounded border bg-white p-3 text-sm text-gray-700 whitespace-pre-wrap">
                     {result.state.thoughts[result.state.thoughts.length - 1]}
@@ -557,9 +658,9 @@ export default function TaskRunnerPage() {
             </div>
           ) : null}
 
-          {executionSteps.length > 0 ? (
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
+	          {executionSteps.length > 0 ? (
+	            <div className="bg-white rounded-lg shadow p-6">
+	              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">Execution Panel</h3>
                   <p className="mt-1 text-sm text-gray-600">
@@ -577,60 +678,144 @@ export default function TaskRunnerPage() {
                     {executionSteps.filter((call) => call.screenshotPath).length} screenshots
                   </span>
                 </div>
-              </div>
+	              </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
-                <div className="rounded border bg-gray-50 p-4">
-                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Runtime Page</div>
-                  <div className="mt-2 text-sm text-gray-900">
-                    {result?.state?.current_page_title || result?.state?.current_url || 'No page captured'}
-                  </div>
-                  {result?.state?.current_url ? (
-                    <a
-                      href={result.state.current_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 block break-all text-sm text-sky-700 hover:text-sky-900"
-                    >
-                      {result.state.current_url}
-                    </a>
-                  ) : null}
-                  {result?.state?.current_page_source ? (
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      {Object.entries(result.state.current_page_source).slice(0, 5).map(([key, value]) => (
-                        <span key={key} className="rounded border bg-white px-2 py-1 text-gray-700">
-                          {key}: {formatValue(value)}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="rounded border bg-gray-50 p-4">
-                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">GUI Signals</div>
-                  <div className="mt-3 space-y-2">
-                    {guiActions.length === 0 ? (
-                      <div className="text-sm text-gray-500">No GUI actions recorded in this run.</div>
-                    ) : (
-                      guiActions.map((action, index) => (
-                        <div key={`${action.step}-${action.action}-${index}`} className="rounded border bg-white px-3 py-2 text-sm">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-medium text-gray-900">{action.action}</span>
-                            <span className={`rounded px-2 py-1 text-xs ${action.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                              {action.success ? 'success' : 'failed'}
-                            </span>
-                          </div>
-                          <div className="mt-1 break-all text-xs text-gray-500">
-                            step {action.step}{action.target ? ` · ${action.target}` : ''}
+	              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded border bg-white p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Current Environment</div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-gray-500">Page</div>
+                          <div className="mt-1 text-sm text-gray-900 break-words">
+                            {result?.state?.current_page_title || result?.state?.current_url || 'No page captured'}
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-gray-500">Scenario</div>
+                          <div className="mt-1 text-sm text-gray-900">
+                            {String(result?.state?.environment?.scenario_type || 'generic')}
+                          </div>
+                        </div>
+                      </div>
+                      {result?.state?.current_url ? (
+                        <a
+                          href={result.state.current_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 block break-all text-sm text-sky-700 hover:text-sky-900"
+                        >
+                          {result.state.current_url}
+                        </a>
+                      ) : null}
+                    </div>
 
-              <div className="space-y-4">
+                    <div className="rounded border bg-white p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Checkpoint / Resume</div>
+                      {activeCheckpoint ? (
+                          <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3">
+                          <div className="font-medium text-amber-900">
+                            {checkpointTitle}
+                          </div>
+                          <div className="mt-1 text-sm text-amber-800">
+                            {checkpointDescription}
+                          </div>
+                          <div className="mt-2 text-xs text-amber-700">
+                            Resume: {checkpointResumeHint}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-3 text-sm text-gray-500">
+                          No active checkpoint. Runtime can continue automatically.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+	              <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
+	                <div className="rounded border bg-gray-50 p-4">
+	                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Candidate Tools</div>
+                      <div className="mt-3 space-y-2">
+                        {candidateTools.length === 0 ? (
+                          <div className="text-sm text-gray-500">No candidate tools recorded yet.</div>
+                        ) : (
+                          candidateTools.map((tool) => (
+                            <div key={tool.name} className="rounded border bg-white px-3 py-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-medium text-gray-900">{tool.name}</span>
+                                <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">{tool.category}</span>
+                              </div>
+                              <div className="mt-1 text-xs text-gray-600">{tool.reason}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+	                </div>
+
+	                <div className="rounded border bg-gray-50 p-4">
+	                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Chosen Tool</div>
+	                  <div className="mt-3 space-y-2">
+	                    {currentDecision?.chosen_tool ? (
+                          <div className="rounded border bg-white px-3 py-3">
+                            <div className="font-medium text-gray-900">{currentDecision.chosen_tool}</div>
+                            <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">
+                              {currentDecision.chosen_tool_reason || 'No rationale recorded.'}
+                            </div>
+                            {currentDecision.tool_args ? (
+                              <pre className="mt-3 overflow-x-auto rounded border bg-gray-50 p-3 text-xs text-gray-700">
+                                {formatJson(currentDecision.tool_args)}
+                              </pre>
+                            ) : null}
+                          </div>
+	                    ) : (
+	                      <div className="text-sm text-gray-500">No chosen tool recorded yet.</div>
+	                    )}
+	                  </div>
+	                </div>
+	              </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <div className="rounded border bg-white p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Scene Memory</div>
+                      <div className="mt-2 text-sm text-gray-800">
+                        {memorySummary ? (
+                          <pre className="overflow-x-auto rounded border bg-gray-50 p-3 text-xs text-gray-700">
+                            {formatJson(memorySummary)}
+                          </pre>
+                        ) : (
+                          'No memory snapshot yet.'
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded border bg-white p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Latest Observation</div>
+                      <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap">
+                        {latestObservation}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <div className="rounded border bg-white p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Error / Recovery</div>
+                      {recoveryTrace.length === 0 ? (
+                        <div className="mt-2 text-sm text-gray-500">No recovery attempts recorded.</div>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {recoveryTrace.slice(-3).reverse().map((item, index) => (
+                            <div key={`${item.timestamp}-${index}`} className="rounded border bg-gray-50 px-3 py-2 text-sm">
+                              <div className="font-medium text-gray-900">{item.error_type} · {item.tool_name}</div>
+                              <div className="mt-1 text-gray-700">{item.error_message}</div>
+                              {item.suggested_action ? (
+                                <div className="mt-2 text-xs text-gray-600">Next: {item.suggested_action}</div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+	              <div className="space-y-4">
                 {executionSteps.map((call) => (
                   <div key={`${call.step}-${call.tool}`} className="border rounded-lg p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">

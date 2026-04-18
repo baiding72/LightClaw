@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import Any, Optional
 
 from app.core.config import get_settings
-from app.core.enums import TaskStatus
 from app.core.logger import logger
 from app.gateway.collector import GatewayCollector
 from app.llm import get_llm_adapter
@@ -56,6 +55,9 @@ class Agent:
         allowed_tools: Optional[list[str]] = None,
         task_definition: Optional[TaskDefinition] = None,
         browser_context: Optional[dict[str, Any]] = None,
+        scenario_type: Optional[str] = None,
+        scenario_context: Optional[dict[str, Any]] = None,
+        resume_state: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """
         运行 Agent 执行任务
@@ -72,15 +74,27 @@ class Agent:
         """
         # 初始化状态
         trajectory_id = f"traj_{self.task_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        self.state = AgentState(
-            task_id=self.task_id,
-            instruction=instruction,
-            trajectory_id=trajectory_id,
-            max_steps=self.settings.max_steps,
-            browser_context=browser_context,
-        )
-        if browser_context and browser_context.get("selected_tab"):
-            selected_tab = browser_context["selected_tab"]
+        if resume_state:
+            self.state = AgentState.from_dict(resume_state)
+            self.state.instruction = instruction
+            self.state.browser_context = browser_context or self.state.browser_context
+            self.state.scenario_type = scenario_type or self.state.scenario_type
+            self.state.scenario_context = scenario_context or self.state.scenario_context
+            if self.state.active_checkpoint:
+                self.state.resume_from_checkpoint()
+        else:
+            self.state = AgentState(
+                task_id=self.task_id,
+                instruction=instruction,
+                trajectory_id=trajectory_id,
+                max_steps=self.settings.max_steps,
+                browser_context=browser_context,
+                scenario_type=scenario_type,
+                scenario_context=scenario_context,
+            )
+
+        if self.state.browser_context and self.state.browser_context.get("selected_tab"):
+            selected_tab = self.state.browser_context["selected_tab"]
             self.state.current_url = selected_tab.get("url")
             self.state.current_page_title = selected_tab.get("title")
 
@@ -104,8 +118,15 @@ class Agent:
 
         try:
             # 初始规划
-            plan = await self.planner.plan(instruction, self.state, allowed_tools)
-            logger.info(f"Initial plan: {plan}")
+            if not self.state.plan_steps:
+                self.state.set_lifecycle("planning")
+                plan = await self.planner.plan(instruction, self.state, allowed_tools)
+                self.state.set_plan(
+                    plan.get("understanding", instruction),
+                    plan.get("steps", []),
+                    plan.get("expected_result", ""),
+                )
+                logger.info(f"Initial plan: {plan}")
 
             # 主循环
             while True:
@@ -117,6 +138,7 @@ class Agent:
 
                 # 增加步骤
                 self.state.increment_step()
+                self.state.set_lifecycle("running")
 
                 # 决定下一步动作
                 decision = await self.planner.decide_next_action(self.state, allowed_tools)
@@ -124,6 +146,13 @@ class Agent:
                 # 记录思考
                 if decision.get("thought"):
                     self.state.add_thought(decision["thought"])
+                self.state.record_decision(
+                    candidate_tools=decision.get("candidate_tools", []),
+                    chosen_tool=decision.get("tool_name"),
+                    chosen_tool_reason=decision.get("thought") or "",
+                    tool_args=decision.get("tool_args"),
+                    response=decision.get("response"),
+                )
 
                 # 如果没有工具调用，可能是完成了
                 if not decision.get("tool_name"):
@@ -139,6 +168,12 @@ class Agent:
                 tool_name = decision["tool_name"]
                 tool_args = decision["tool_args"]
 
+                checkpoint = self._maybe_create_checkpoint(tool_name, tool_args)
+                if checkpoint:
+                    self.state.add_checkpoint(**checkpoint)
+                    self.state.mark_waiting(checkpoint["title"])
+                    break
+
                 # 记录步骤开始
                 step_id = await self.gateway.log_step_start(
                     task_id=self.task_id,
@@ -150,6 +185,7 @@ class Agent:
                 )
 
                 # 执行（带重试）
+                self.state.set_lifecycle("acting")
                 result = await self.executor.execute_with_retry(
                     tool_name=tool_name,
                     tool_args=tool_args,
@@ -160,7 +196,9 @@ class Agent:
                 )
 
                 # 观察结果
+                self.state.set_lifecycle("observing")
                 observation = await self.observer.observe(tool_name, result, self.state)
+                self.state.advance_subgoal()
 
                 # 记录步骤结束
                 await self.gateway.log_step_end(
@@ -172,6 +210,7 @@ class Agent:
 
                 # 处理失败
                 if not result.success:
+                    self.state.set_lifecycle("recovering")
                     # 分析失败
                     analysis = await self.recovery.analyze_failure(
                         tool_name, tool_args, result, self.state
@@ -181,6 +220,14 @@ class Agent:
                     if analysis.get("is_recoverable"):
                         recovery_plan = await self.recovery.generate_recovery_plan(
                             self.state, analysis
+                        )
+                        self.state.record_recovery(
+                            tool_name=tool_name,
+                            error_type=analysis.get("error_type") or (result.error_type or "unknown"),
+                            error_message=result.error or "Unknown error",
+                            suggested_action=analysis.get("suggested_action"),
+                            suggested_fix=analysis.get("suggested_fix"),
+                            recovery_plan=recovery_plan,
                         )
                         if recovery_plan:
                             logger.info(f"Attempting recovery: {recovery_plan}")
@@ -233,20 +280,57 @@ class Agent:
         response_lower = response.lower()
         return any(indicator in response_lower for indicator in completion_indicators)
 
+    def _maybe_create_checkpoint(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+    ) -> Optional[dict[str, Any]]:
+        if not self.state or self.state.scenario_type != "job_application":
+            return None
+
+        if tool_name == "open_url":
+            url = str(tool_args.get("url", "")).lower()
+            if any(token in url for token in ["login", "signin", "auth"]):
+                return {
+                    "checkpoint_type": "login_required",
+                    "title": "Login Confirmation Required",
+                    "description": f"Agent is about to open a login page: {tool_args.get('url')}",
+                    "resume_hint": "Complete login in the browser, then run the task again to resume.",
+                    "metadata": {"tool_name": tool_name, "tool_args": tool_args},
+                }
+
+        if tool_name == "click":
+            selector = str(tool_args.get("selector", "")).lower()
+            if any(token in selector for token in ["submit", "apply", "send", "confirm"]):
+                return {
+                    "checkpoint_type": "submit_confirmation",
+                    "title": "Submission Confirmation Required",
+                    "description": f"Agent is about to trigger a high-risk click action: {tool_args.get('selector')}",
+                    "resume_hint": "Review the form, confirm submission manually if needed, then run the task again to continue.",
+                    "metadata": {"tool_name": tool_name, "tool_args": tool_args},
+                }
+
+        return None
+
     def _build_final_result(self) -> dict[str, Any]:
         """构建最终结果"""
         return {
             "success": self.state.is_completed and not self.state.is_failed,
+            "paused": self.state.lifecycle_status == "waiting_for_user",
             "task_id": self.task_id,
             "trajectory_id": self.state.trajectory_id,
             "instruction": self.state.instruction,
             "outcome": self.state.final_outcome,
+            "lifecycle_status": self.state.lifecycle_status,
             "total_steps": self.state.current_step,
             "total_tokens": self.state.total_tokens,
             "total_latency_ms": self.state.total_latency_ms,
             "retry_count": self.state.retry_count,
             "successful_recoveries": self.state.successful_recoveries,
             "errors": self.state.errors,
+            "current_goal": self.state.current_goal,
+            "current_subgoal": self.state.current_subgoal,
+            "active_checkpoint": self.state.active_checkpoint,
             "state": self.state.to_dict(),
         }
 

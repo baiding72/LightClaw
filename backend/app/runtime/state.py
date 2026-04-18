@@ -72,6 +72,33 @@ class AgentState:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
 
+    def refresh_memory_summary(self) -> None:
+        selected_tab = self.browser_context.get("selected_tab") if self.browser_context else None
+        self.memory_summary = {
+            "goal": self.current_goal or self.instruction,
+            "subgoal": self.current_subgoal,
+            "scenario_type": self.scenario_type,
+            "selected_tab": {
+                "title": selected_tab.get("title"),
+                "url": selected_tab.get("url"),
+            } if selected_tab else None,
+            "current_page": {
+                "title": self.current_page_title,
+                "url": self.current_url,
+                "source": self.current_page_source,
+            } if self.current_url or self.current_page_title else None,
+            "expected_result": self.expected_result,
+            "last_observation": self.observations[-1] if self.observations else None,
+            "last_tool": self.tool_calls[-1]["tool"] if self.tool_calls else None,
+            "active_checkpoint": {
+                "type": self.active_checkpoint.get("type"),
+                "title": self.active_checkpoint.get("title"),
+                "resume_hint": self.active_checkpoint.get("resume_hint"),
+            } if self.active_checkpoint else None,
+            "checkpoint_count": len(self.checkpoints),
+            "error_count": len(self.errors),
+        }
+
     def get_environment_snapshot(self) -> dict[str, Any]:
         selected_tab = self.browser_context.get("selected_tab") if self.browser_context else None
         tabs = self.browser_context.get("tabs", [])[:5] if self.browser_context else []
@@ -140,10 +167,12 @@ class AgentState:
         self.expected_result = expected_result
         if steps:
             self.current_subgoal = steps[min(self.current_step, len(steps) - 1)]
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def set_lifecycle(self, lifecycle_status: str) -> None:
         self.lifecycle_status = lifecycle_status
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def advance_subgoal(self) -> None:
@@ -151,10 +180,12 @@ class AgentState:
             return
         next_index = min(len(self.tool_calls), len(self.plan_steps) - 1)
         self.current_subgoal = self.plan_steps[next_index]
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def set_candidate_tools(self, candidate_tools: list[dict[str, Any]]) -> None:
         self.candidate_tools = candidate_tools
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def record_decision(
@@ -177,6 +208,7 @@ class AgentState:
             "timestamp": datetime.now().isoformat(),
         }
         self.decision_trace.append(self.current_decision)
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def record_recovery(
@@ -199,6 +231,7 @@ class AgentState:
             "recovery_plan": recovery_plan,
             "timestamp": datetime.now().isoformat(),
         })
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def add_checkpoint(
@@ -225,6 +258,7 @@ class AgentState:
         self.checkpoints.append(checkpoint)
         self.active_checkpoint = checkpoint
         self.lifecycle_status = "waiting_for_user"
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def resume_from_checkpoint(self) -> None:
@@ -233,6 +267,7 @@ class AgentState:
             self.active_checkpoint["completed_at"] = datetime.now().isoformat()
         self.active_checkpoint = None
         self.lifecycle_status = "running"
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def add_tool_call(
@@ -250,6 +285,7 @@ class AgentState:
             "error": error,
             "timestamp": datetime.now().isoformat(),
         })
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def add_gui_action(
@@ -267,6 +303,7 @@ class AgentState:
             "details": details,
             "timestamp": datetime.now().isoformat(),
         })
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def add_error(
@@ -281,43 +318,52 @@ class AgentState:
             "message": error_message,
             "timestamp": datetime.now().isoformat(),
         })
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def add_observation(self, observation: str) -> None:
         self.observations.append(observation)
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def add_thought(self, thought: str) -> None:
         self.thoughts.append(thought)
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def increment_step(self) -> None:
         self.current_step += 1
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def add_token_usage(self, tokens: int) -> None:
         self.total_tokens += tokens
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def add_latency(self, latency_ms: int) -> None:
         self.total_latency_ms += latency_ms
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def mark_completed(self, outcome: str = "success") -> None:
         self.is_completed = True
         self.lifecycle_status = "completed"
         self.final_outcome = outcome
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def mark_failed(self, reason: str) -> None:
         self.is_failed = True
         self.lifecycle_status = "failed"
         self.final_outcome = f"failed: {reason}"
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def mark_waiting(self, reason: str) -> None:
         self.final_outcome = reason
         self.lifecycle_status = "waiting_for_user"
+        self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
     def to_dict(self) -> dict[str, Any]:
@@ -339,6 +385,7 @@ class AgentState:
             "current_url": self.current_url,
             "current_page_title": self.current_page_title,
             "current_page_source": self.current_page_source,
+            "last_tool_result": self.last_tool_result,
             "browser_context": self.browser_context,
             "scenario_type": self.scenario_type,
             "scenario_context": self.scenario_context,
@@ -406,4 +453,5 @@ class AgentState:
             created_at=_parse_datetime(payload.get("created_at")),
             updated_at=_parse_datetime(payload.get("updated_at")),
         )
+        state.refresh_memory_summary()
         return state

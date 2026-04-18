@@ -7,7 +7,10 @@ from enum import Enum
 class TaskStatus(str, Enum):
     """任务状态"""
     PENDING = "pending"
+    PLANNING = "planning"
     RUNNING = "running"
+    WAITING_FOR_USER = "waiting_for_user"
+    RECOVERING = "recovering"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
