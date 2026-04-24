@@ -3,10 +3,9 @@ Benchmark 运行器
 
 运行评测并收集指标
 """
-import asyncio
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from app.core.enums import TaskCategory, TaskDifficulty
 from app.core.logger import logger
@@ -15,9 +14,6 @@ from app.schemas.eval import EvaluationMetrics, EvaluationResponse, TaskEvaluati
 from app.schemas.task import TaskDefinition
 from app.tasks.definitions import (
     ALL_TASKS,
-    get_task_by_id,
-    get_tasks_by_category,
-    get_tasks_by_difficulty,
 )
 from app.tasks.validators import MockValidator, TaskValidator
 
@@ -32,7 +28,7 @@ class BenchmarkRunner:
     async def run_single_task(
         self,
         task: TaskDefinition,
-        browser_page: Optional[Any] = None,
+        browser_page: Any | None = None,
     ) -> dict[str, Any]:
         """运行单个任务"""
         logger.info(f"Running task: {task.task_id} - {task.instruction[:50]}")
@@ -92,10 +88,10 @@ class BenchmarkRunner:
     async def run_benchmark(
         self,
         eval_name: str,
-        task_ids: Optional[list[str]] = None,
-        categories: Optional[list[str]] = None,
-        difficulties: Optional[list[str]] = None,
-        browser_page: Optional[Any] = None,
+        task_ids: list[str] | None = None,
+        categories: list[str] | None = None,
+        difficulties: list[str] | None = None,
+        browser_page: Any | None = None,
     ) -> EvaluationResponse:
         """
         运行 Benchmark
@@ -178,9 +174,9 @@ class BenchmarkRunner:
 
     def _filter_tasks(
         self,
-        task_ids: Optional[list[str]] = None,
-        categories: Optional[list[str]] = None,
-        difficulties: Optional[list[str]] = None,
+        task_ids: list[str] | None = None,
+        categories: list[str] | None = None,
+        difficulties: list[str] | None = None,
     ) -> list[TaskDefinition]:
         """筛选任务"""
         if task_ids:

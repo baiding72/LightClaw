@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.enums import FailureType
 
 
-class AgentActionType(str, Enum):
+class AgentActionType(StrEnum):
     TOOL_CALL = "tool_call"
     ASK_USER = "ask_user"
     FINAL_ANSWER = "final_answer"
@@ -27,7 +27,7 @@ class AgentActionType(str, Enum):
     GUI_GROUNDING = "gui_grounding"
 
 
-class AgentActionStatus(str, Enum):
+class AgentActionStatus(StrEnum):
     PLANNED = "planned"
     RUNNING = "running"
     SUCCESS = "success"
@@ -41,8 +41,8 @@ class ToolArgumentValidation(BaseModel):
 
     is_valid: bool
     arguments: dict[str, Any] = Field(default_factory=dict)
-    error_type: Optional[str] = None
-    error_message: Optional[str] = None
+    error_type: str | None = None
+    error_message: str | None = None
 
 
 class AgentAction(BaseModel):
@@ -53,15 +53,15 @@ class AgentAction(BaseModel):
     action_type: AgentActionType
     step_id: str
     trace_id: str
-    action_name: Optional[str] = None
-    tool_name: Optional[str] = None
+    action_name: str | None = None
+    tool_name: str | None = None
     arguments: dict[str, Any] = Field(default_factory=dict)
-    observation: Optional[Any] = None
+    observation: Any | None = None
     status: AgentActionStatus = AgentActionStatus.PLANNED
-    error_type: Optional[str] = None
-    error_message: Optional[str] = None
+    error_type: str | None = None
+    error_message: str | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
-    latency_ms: Optional[int] = None
+    latency_ms: int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("step_id", "trace_id")
@@ -71,16 +71,16 @@ class AgentAction(BaseModel):
             raise ValueError("step_id and trace_id must be non-empty")
         return value
 
-    def mark_running(self) -> "AgentAction":
+    def mark_running(self) -> AgentAction:
         self.status = AgentActionStatus.RUNNING
         return self
 
     def mark_success(
         self,
         *,
-        observation: Optional[Any] = None,
-        latency_ms: Optional[int] = None,
-    ) -> "AgentAction":
+        observation: Any | None = None,
+        latency_ms: int | None = None,
+    ) -> AgentAction:
         self.status = AgentActionStatus.SUCCESS
         if observation is not None:
             self.observation = observation
@@ -94,9 +94,9 @@ class AgentAction(BaseModel):
         *,
         error_type: str,
         error_message: str,
-        observation: Optional[Any] = None,
-        latency_ms: Optional[int] = None,
-    ) -> "AgentAction":
+        observation: Any | None = None,
+        latency_ms: int | None = None,
+    ) -> AgentAction:
         self.status = AgentActionStatus.FAILED
         self.error_type = error_type
         self.error_message = error_message

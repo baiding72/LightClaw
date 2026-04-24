@@ -63,6 +63,10 @@ backend/data/screenshots/*.png
 backend/data/datapool/*.jsonl
 backend/data/exports/*.jsonl
 backend/data/eval/*.json
+backend/data/eval_reports/*
+backend/data/training_exports/*
+!backend/data/eval_reports/.gitkeep
+!backend/data/training_exports/.gitkeep
 
 # Logs
 logs/

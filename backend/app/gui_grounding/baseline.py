@@ -7,16 +7,15 @@ for evaluation and data export tests.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
 class CandidateBox(BaseModel):
     candidate_id: str
-    selector: Optional[str] = None
+    selector: str | None = None
     text: str = ""
-    role: Optional[str] = None
+    role: str | None = None
     bbox: tuple[float, float, float, float]
     context: str = ""
 
@@ -33,17 +32,17 @@ class GroundingInput(BaseModel):
 
 
 class GroundingPrediction(BaseModel):
-    candidate_id: Optional[str] = None
-    selector: Optional[str] = None
-    point: Optional[tuple[float, float]] = None
-    bbox: Optional[tuple[float, float, float, float]] = None
+    candidate_id: str | None = None
+    selector: str | None = None
+    point: tuple[float, float] | None = None
+    bbox: tuple[float, float, float, float] | None = None
     confidence: float = 0.0
     rationale: str = ""
 
 
 class GroundingLabel(BaseModel):
-    candidate_id: Optional[str] = None
-    selector: Optional[str] = None
+    candidate_id: str | None = None
+    selector: str | None = None
     bbox: tuple[float, float, float, float]
 
 

@@ -1,0 +1,32 @@
+{
+  "export_time": "2026-04-25T04:53:17.493061",
+  "source": "trajectory+deterministic_fixture",
+  "sft_count": 26,
+  "dpo_pair_count": 19,
+  "grpo_group_count": 15,
+  "self_correction_count": 22,
+  "error_type_distribution": {
+    "wrong_args": 5,
+    "tool_runtime_error": 2,
+    "gui_wrong_element": 10,
+    "wrong_tool": 1,
+    "invalid_format": 1,
+    "policy_violation": 1,
+    "gui_click_miss": 1,
+    "over_correction": 1
+  },
+  "action_type_distribution": {
+    "tool_call": 159,
+    "gui_grounding": 5,
+    "self_correction": 12,
+    "ask_user": 2,
+    "gui_click": 2
+  },
+  "avg_steps": 1.5,
+  "chosen_reward_avg": 0.8635446115288221,
+  "rejected_reward_avg": 0.6615764411027569,
+  "invalid_sample_count": 0,
+  "schema_validation_pass_rate": 1.0,
+  "suspicious_pair_count": 0,
+  "low_signal_group_count": 0
+}

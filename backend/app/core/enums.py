@@ -47,6 +47,8 @@ class FailureType(str, Enum):
     - wrong_tool: 选择了错误的工具
     - wrong_args: 工具参数错误
     - tool_runtime_error: 工具运行时错误
+    - tool_timeout: 工具执行超时
+    - tool_exception: 工具未分类异常
     - gui_click_miss: GUI 点击未命中目标
     - gui_wrong_element: GUI 操作了错误元素
     - gui_state_stale: GUI 状态过期（页面已变化）
@@ -56,12 +58,16 @@ class FailureType(str, Enum):
     - invalid_format: 工具调用格式错误（例如非法 JSON 或非对象参数）
     - policy_violation: 违反运行时策略
     - redundant_tool_call: 冗余工具调用
+    - hallucinated_observation: 基于不存在证据生成观察/结论
+    - over_correction: 原动作正确但被错误修改
     - repair_success: 修复成功
     - repair_failed: 修复失败
     """
     WRONG_TOOL = "wrong_tool"
     WRONG_ARGS = "wrong_args"
     TOOL_RUNTIME_ERROR = "tool_runtime_error"
+    TOOL_TIMEOUT = "tool_timeout"
+    TOOL_EXCEPTION = "tool_exception"
     GUI_CLICK_MISS = "gui_click_miss"
     GUI_WRONG_ELEMENT = "gui_wrong_element"
     GUI_STATE_STALE = "gui_state_stale"
@@ -71,6 +77,8 @@ class FailureType(str, Enum):
     INVALID_FORMAT = "invalid_format"
     POLICY_VIOLATION = "policy_violation"
     REDUNDANT_TOOL_CALL = "redundant_tool_call"
+    HALLUCINATED_OBSERVATION = "hallucinated_observation"
+    OVER_CORRECTION = "over_correction"
     REPAIR_SUCCESS = "repair_success"
     REPAIR_FAILED = "repair_failed"
 

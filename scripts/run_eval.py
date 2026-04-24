@@ -16,10 +16,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.core.config import get_settings
-from app.eval.deterministic import build_deterministic_evaluation
-from app.eval.reports import ReportGenerator
-from app.eval.runner import EvaluationRunner
+from app.core.config import get_settings  # noqa: E402
+from app.eval.deterministic import build_deterministic_evaluation  # noqa: E402
+from app.eval.reports import ReportGenerator  # noqa: E402
+from app.eval.runner import EvaluationRunner  # noqa: E402
 
 
 async def run_live(eval_name: str):
@@ -67,6 +67,10 @@ async def main() -> None:
     print(f"GUI grounding accuracy: {result.metrics.gui_action_accuracy:.2%}")
     print(f"Average steps: {result.metrics.avg_steps:.2f}")
     print(f"Average latency: {result.metrics.avg_latency_ms:.0f}ms")
+    if result.self_correction_metrics:
+        print(f"Correction attempt rate: {result.self_correction_metrics.get('correction_attempt_rate', 0):.2%}")
+        print(f"Recovery success rate: {result.self_correction_metrics.get('recovery_success_rate', 0):.2%}")
+        print(f"Over-correction rate: {result.self_correction_metrics.get('over_correction_rate', 0):.2%}")
     print(f"Report: {latest_json}")
 
 

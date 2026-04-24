@@ -3,7 +3,8 @@ Rule-based verifier and reward scoring for deterministic LightClaw demos.
 """
 from __future__ import annotations
 
-from typing import Any, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -25,9 +26,9 @@ class RewardBreakdown(BaseModel):
 
 
 class ExpectedAction(BaseModel):
-    tool_name: Optional[str] = None
+    tool_name: str | None = None
     arguments: dict[str, Any] = Field(default_factory=dict)
-    gui_target_id: Optional[str] = None
+    gui_target_id: str | None = None
 
 
 def _coerce_actions(actions: Iterable[AgentAction | dict[str, Any]]) -> list[AgentAction]:
@@ -47,8 +48,8 @@ class RuleBasedVerifier:
         self,
         actions: Iterable[AgentAction | dict[str, Any]],
         *,
-        expected_actions: Optional[list[ExpectedAction | dict[str, Any]]] = None,
-        task_success: Optional[bool] = None,
+        expected_actions: list[ExpectedAction | dict[str, Any]] | None = None,
+        task_success: bool | None = None,
     ) -> RewardBreakdown:
         normalized = _coerce_actions(actions)
         expected = [

@@ -11,13 +11,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.core.config import get_settings
-from app.training.exporter import export_training_data
+from app.core.config import get_settings  # noqa: E402
+from app.training.exporter import export_training_data  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export LightClaw training data.")
     parser.add_argument("--fixtures", action="store_true", help="Include deterministic fixture trajectories.")
+    parser.add_argument("--with-data-card", action="store_true", help="Write data_card.json with quality checks.")
     parser.add_argument("--output-dir", default=None, help="Output directory. Defaults to backend data exports.")
     parser.add_argument("--trajectory-dir", default=None, help="Recorded trajectory directory.")
     args = parser.parse_args()
@@ -29,6 +30,7 @@ def main() -> None:
         output_dir=output_dir,
         trajectory_dir=trajectory_dir,
         include_fixtures=args.fixtures,
+        with_data_card=args.with_data_card,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

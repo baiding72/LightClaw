@@ -29,6 +29,14 @@ interface LatestEvalReport {
     avg_steps?: number
     avg_latency_ms: number
   }
+  self_correction_metrics?: {
+    correction_attempt_rate?: number
+    recovery_success_rate?: number
+    over_correction_rate?: number
+    revision_valid_rate?: number
+    revision_improves_reward_rate?: number
+    first_error_type_distribution?: Record<string, number>
+  }
 }
 
 export default function EvaluationPage() {
@@ -99,51 +107,88 @@ export default function EvaluationPage() {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">最新本地评测报告</h3>
         {latestReport ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <div className="text-gray-500">模式</div>
-              <div className="font-semibold text-gray-900">{latestReport.mode || 'deterministic'}</div>
-            </div>
-            <div>
-              <div className="text-gray-500">任务成功率</div>
-              <div className="font-semibold text-gray-900">
-                {(latestReport.metrics.task_success_rate * 100).toFixed(1)}%
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <div className="text-gray-500">模式</div>
+                <div className="font-semibold text-gray-900">{latestReport.mode || 'deterministic'}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">任务成功率</div>
+                <div className="font-semibold text-gray-900">
+                  {(latestReport.metrics.task_success_rate * 100).toFixed(1)}%
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">错误参数率</div>
+                <div className="font-semibold text-gray-900">
+                  {((latestReport.metrics.wrong_args_rate || 0) * 100).toFixed(1)}%
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">GUI Grounding</div>
+                <div className="font-semibold text-gray-900">
+                  {(latestReport.metrics.gui_action_accuracy * 100).toFixed(1)}%
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">无效调用率</div>
+                <div className="font-semibold text-gray-900">
+                  {((latestReport.metrics.invalid_tool_call_rate || 0) * 100).toFixed(1)}%
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">策略违规率</div>
+                <div className="font-semibold text-gray-900">
+                  {((latestReport.metrics.policy_violation_rate || 0) * 100).toFixed(1)}%
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">平均步骤</div>
+                <div className="font-semibold text-gray-900">
+                  {(latestReport.metrics.avg_steps || 0).toFixed(1)}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">平均延迟</div>
+                <div className="font-semibold text-gray-900">
+                  {latestReport.metrics.avg_latency_ms.toFixed(0)}ms
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-gray-500">错误参数率</div>
-              <div className="font-semibold text-gray-900">
-                {((latestReport.metrics.wrong_args_rate || 0) * 100).toFixed(1)}%
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-500">GUI Grounding</div>
-              <div className="font-semibold text-gray-900">
-                {(latestReport.metrics.gui_action_accuracy * 100).toFixed(1)}%
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-500">无效调用率</div>
-              <div className="font-semibold text-gray-900">
-                {((latestReport.metrics.invalid_tool_call_rate || 0) * 100).toFixed(1)}%
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-500">策略违规率</div>
-              <div className="font-semibold text-gray-900">
-                {((latestReport.metrics.policy_violation_rate || 0) * 100).toFixed(1)}%
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-500">平均步骤</div>
-              <div className="font-semibold text-gray-900">
-                {(latestReport.metrics.avg_steps || 0).toFixed(1)}
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-500">平均延迟</div>
-              <div className="font-semibold text-gray-900">
-                {latestReport.metrics.avg_latency_ms.toFixed(0)}ms
+            <div className="border-t pt-4">
+              <h4 className="font-medium text-gray-900 mb-3">Self-correction</h4>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                <div>
+                  <div className="text-gray-500">修正尝试率</div>
+                  <div className="font-semibold text-gray-900">
+                    {((latestReport.self_correction_metrics?.correction_attempt_rate || 0) * 100).toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">恢复成功率</div>
+                  <div className="font-semibold text-gray-900">
+                    {((latestReport.self_correction_metrics?.recovery_success_rate || 0) * 100).toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">过度修正率</div>
+                  <div className="font-semibold text-gray-900">
+                    {((latestReport.self_correction_metrics?.over_correction_rate || 0) * 100).toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">修正有效率</div>
+                  <div className="font-semibold text-gray-900">
+                    {((latestReport.self_correction_metrics?.revision_valid_rate || 0) * 100).toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Reward 改善率</div>
+                  <div className="font-semibold text-gray-900">
+                    {((latestReport.self_correction_metrics?.revision_improves_reward_rate || 0) * 100).toFixed(1)}%
+                  </div>
+                </div>
               </div>
             </div>
           </div>

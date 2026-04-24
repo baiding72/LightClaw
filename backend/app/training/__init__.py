@@ -9,7 +9,6 @@ from app.training.dataset_schema import (
 )
 from app.training.export_gui import GUIGroundingExporter
 from app.training.export_tooluse import ToolUseExporter
-from app.training.exporter import export_training_data
 
 __all__ = [
     "ToolUseDatasetSample",
@@ -21,5 +20,4 @@ __all__ = [
     "DatasetExportConfig",
     "ToolUseExporter",
     "GUIGroundingExporter",
-    "export_training_data",
 ]

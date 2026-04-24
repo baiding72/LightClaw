@@ -1,13 +1,10 @@
 """
 评测服务
 """
-from datetime import datetime
 import json
 from pathlib import Path
-from typing import Optional
-import uuid
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import FailureType
@@ -58,6 +55,8 @@ class EvalService:
             total_token_cost=result.metrics.total_token_cost,
             details={
                 "details": [d.model_dump() for d in result.details],
+                "self_correction_metrics": result.self_correction_metrics,
+                "failure_analysis": result.failure_analysis,
             },
         )
 
@@ -81,7 +80,7 @@ class EvalService:
             encoding="utf-8",
         )
 
-    async def get_evaluation(self, eval_id: str) -> Optional[EvaluationResponse]:
+    async def get_evaluation(self, eval_id: str) -> EvaluationResponse | None:
         """获取评测详情"""
         result = await self.db.execute(
             select(EvaluationResultModel).where(EvaluationResultModel.eval_id == eval_id)
@@ -204,6 +203,8 @@ class EvalService:
                 total_token_cost=eval_model.total_token_cost,
             ),
             details=[TaskEvaluationDetail(**d) for d in details],
+            self_correction_metrics=(eval_model.details or {}).get("self_correction_metrics", {}),
+            failure_analysis=(eval_model.details or {}).get("failure_analysis", {}),
             created_at=eval_model.created_at,
         )
 

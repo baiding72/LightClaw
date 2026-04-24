@@ -1,15 +1,15 @@
 """
 评测相关 API 路由
 """
-from typing import Optional
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db import get_db
 from app.schemas.eval import (
     DashboardStats,
@@ -18,15 +18,15 @@ from app.schemas.eval import (
     EvaluationResponse,
 )
 from app.services.eval_service import EvalService
-from app.core.config import get_settings
 
 router = APIRouter(prefix="/eval", tags=["evaluation"])
+DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
 @router.post("/run", response_model=EvaluationResponse)
 async def run_evaluation(
     request: EvaluationRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> EvaluationResponse:
     """运行评测"""
     service = EvalService(db)
@@ -35,9 +35,9 @@ async def run_evaluation(
 
 @router.get("", response_model=EvaluationListResponse)
 async def list_evaluations(
+    db: DbSession,
     page: int = 1,
     page_size: int = 20,
-    db: AsyncSession = Depends(get_db),
 ) -> EvaluationListResponse:
     """获取评测列表"""
     service = EvalService(db)
@@ -60,7 +60,7 @@ async def get_latest_eval_report() -> dict[str, Any]:
 @router.get("/{eval_id}", response_model=EvaluationResponse)
 async def get_evaluation(
     eval_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> EvaluationResponse:
     """获取评测详情"""
     service = EvalService(db)
@@ -73,7 +73,7 @@ async def get_evaluation(
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> DashboardStats:
     """获取 Dashboard 统计"""
     service = EvalService(db)
@@ -83,7 +83,7 @@ async def get_dashboard_stats(
 @router.delete("/{eval_id}")
 async def delete_evaluation(
     eval_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> dict:
     """删除评测结果"""
     service = EvalService(db)

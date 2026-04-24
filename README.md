@@ -1,38 +1,83 @@
-# LightClaw：面向个人效率管理的在线自进化轻量智能体
+# LightClaw
 
-LightClaw 是一个本地可运行的轻量 Agent Runtime 项目，重点展示 Tool-use、Self-correction、GUI Grounding baseline、轨迹回流、评测和后训练数据导出。项目保持 FastAPI + React + SQLite 架构，核心测试和 deterministic demo 不依赖真实 LLM API key。
+LightClaw is a lightweight agent runtime and post-training data loop for tool-use, self-correction, and GUI grounding.
 
-## 已实现能力
+它不是一个已经训练完成的生产 Agent，而是一个可本地复现的工程闭环：统一动作 schema、工具执行、错误归因、修复轨迹、reward/verifier、数据导出和 eval dashboard。
 
-- **统一 Action Schema**：用 Pydantic 表达 `tool_call`、`ask_user`、`final_answer`、`revise/self_correction`、`gui_click/gui_grounding`。
-- **Tool-use Executor**：工具参数校验、非法格式归因、运行异常捕获、超时控制、latency 统计和 action logging。
-- **Self-correction 数据轨迹**：支持 `attempt -> feedback/error -> revised action` 的修复轨迹表达，可导出 DPO chosen/rejected pair。
-- **Rule-based Verifier / Reward**：输出 task success、tool correctness、argument correctness、recovery、GUI hit、policy/redundancy penalty、latency proxy 等 breakdown。
-- **GUI Grounding Baseline**：基于 DOM/selector candidates 的 rule-based selector/bbox/click point baseline，并提供 point-in-box、bbox IoU、GUI action accuracy 指标。
-- **训练数据导出**：从真实轨迹或 deterministic fixtures 导出 SFT / DPO / GRPO JSONL。
-- **Deterministic Eval**：无需 LLM key，稳定生成 `backend/data/eval_reports/latest.json`。
-- **前端可视化**：Dashboard、Task Runner、DataPool、Evaluation 页面；Evaluation 页面可读取最新本地评测报告。
+```text
+user task
+  -> agent runtime
+  -> tool executor
+  -> verifier / reward
+  -> trajectory pool
+  -> SFT / DPO / GRPO export
+  -> eval dashboard
+```
 
-## 可运行 Demo
+## Implemented
+
+- **Unified Action Schema**：Pydantic 表达 `tool_call`、`ask_user`、`final_answer`、`self_correction`、`gui_click/gui_grounding`。
+- **Tool Executor**：参数校验、invalid-format/wrong-args 归因、异常捕获、timeout、latency 和 action logging。
+- **Self-correction Loop Data**：构造 `attempt -> error/verifier feedback -> revision` 样本，并检测 over-correction。
+- **Verifier / Reward**：输出 task success、tool correctness、argument correctness、recovery、GUI hit、policy/redundancy penalty 和 latency proxy。
+- **Failure Analysis**：eval report 按 error_type 聚合失败，并保留可 replay sample case。
+- **Training Export**：导出 SFT / DPO / GRPO / self-correction JSONL，并生成 data card。
+- **GUI Grounding Baseline**：rule-based selector/bbox/click point baseline，含 point-in-box、bbox IoU、GUI action accuracy。
+- **Frontend Evaluation View**：React Evaluation 页面可展示 latest deterministic report 和 self-correction metrics。
+
+## Deterministic Demo
+
+deterministic demo 使用固定 fixtures，不依赖真实 LLM API key。它用于证明 schema、eval、export、replay 和 data-quality 检查链路可运行，不代表真实线上指标。
+
+Sample output:
+
+```text
+Task success rate: 87.50%
+Tool execution success rate: 64.29%
+Recovery rate: 80.00%
+Wrong args rate: 7.14%
+GUI grounding accuracy: 100.00%
+Correction attempt rate: 75.00%
+Recovery success rate: 83.33%
+Over-correction rate: 16.67%
+```
+
+Examples:
+
+- [eval_report_example.json](examples/eval_report_example.json)
+- [data_card_example.json](examples/data_card_example.json)
+- [replay_wrong_args_example.md](examples/replay_wrong_args_example.md)
+
+## 5-minute Reproducibility
 
 ```bash
 cd backend
 uv sync
 
-# 运行 deterministic demo，生成轨迹
-uv run python ../scripts/run_demo_tasks.py --mock
-
-# 运行 deterministic eval，生成 backend/data/eval_reports/latest.json
+# 1. Run deterministic eval
 uv run python ../scripts/run_eval.py --mode deterministic
 
-# 导出 SFT / DPO / GRPO 数据
-uv run python ../scripts/export_training_data.py --fixtures
+# 2. Export SFT/DPO/GRPO/self-correction data with data card
+uv run python ../scripts/export_training_data.py --fixtures --with-data-card --output-dir data/training_exports/latest
 
-# 后端测试
+# 3. Replay one failure/correction case
+uv run python ../scripts/replay_trace.py --fixture-case wrong_args
+
+# 4. Dry-run exported training data
+uv run python ../scripts/train_stub.py --input-dir data/training_exports/latest --dry-run
+
+# 5. Run tests
 uv run --with pytest --with pytest-asyncio pytest
 ```
 
-前端：
+One-command reproducibility:
+
+```bash
+cd backend
+uv run python ../scripts/run_all_checks.py
+```
+
+Frontend:
 
 ```bash
 cd frontend
@@ -40,49 +85,41 @@ npm install
 npm run dev
 ```
 
-后端：
+## What This Project Is NOT
 
-```bash
-cd backend
-uv run python -m app.main
-```
+- Not a fully trained production agent.
+- Not an OSWorld-level or Android-level GUI agent.
+- Not claiming real online metrics from deployed users.
+- Not launching LoRA/SFT/DPO/GRPO training inside this repo.
+- Not requiring a real OpenAI-compatible key for core tests and deterministic demos.
 
-默认后端端口仍是 `8000`。如果本机已有服务占用 8000，请通过现有 `VITE_API_PROXY_TARGET` 或本地启动脚本切到其他端口。
+## Roadmap
 
-## 目录说明
+- Add more real trajectories and keep deterministic fixtures separate from live reports.
+- Use browser-plugin SoM screenshots as GUI grounding samples.
+- Connect exported JSONL to external TRL / LLaMA-Factory / verl training configs.
+- Evaluate trained models on real task suites and report those results separately.
+
+## Project Layout
 
 ```text
-backend/app/runtime/        Agent loop、executor、observer、recovery
-backend/app/schemas/        Pydantic schemas，包括统一 action schema
-backend/app/tools/          本地工具与浏览器动作工具
-backend/app/gateway/        JSONL 轨迹事件记录
-backend/app/eval/           deterministic eval、reward、report
-backend/app/gui_grounding/  GUI grounding baseline 与指标
-backend/app/training/       SFT/DPO/GRPO export helpers
-frontend/src/pages/         React 可视化页面
-scripts/                    demo、eval、export、校验脚本
-docs/                       架构、评测、导出和简历说明
+backend/app/runtime/        Agent loop, executor, observer, recovery
+backend/app/schemas/        Pydantic schemas, including AgentAction
+backend/app/eval/           deterministic eval, reward, reports
+backend/app/gui_grounding/  GUI grounding baseline and metrics
+backend/app/training/       SFT/DPO/GRPO export, replay, self-correction samples
+frontend/src/pages/         React dashboard pages
+scripts/                    reproducibility, export, replay, dry-run training
+docs/                       architecture, evaluation, export, interview guide
+examples/                   small checked-in output examples
 ```
 
-## 当前限制
+## Docs
 
-- deterministic eval 使用固定 fixtures，只用于本地验证链路，不代表真实生产指标。
-- GUI Grounding 目前是 selector/rule-based baseline，不是完整 OSWorld/Android Agent。
-- 项目支持 OpenAI-compatible LLM 配置，但核心测试不依赖真实 key；live Agent 效果取决于模型和网页环境。
-- 当前没有真实微调训练流程，只导出可供 TRL / verl / LLaMA-Factory 等框架继续使用的数据。
-
-## 后续路线
-
-- 接入更多真实轨迹，扩展 verifier 和 reward 权重。
-- 将浏览器插件产生的 SoM screenshot + DOM observation 纳入 GUI grounding 数据集。
-- 增加真实网页任务的 replay/eval fixture。
-- 在外部训练框架中验证导出的 SFT/DPO/GRPO 数据。
-
-## 文档
-
-- [系统架构](docs/architecture.md)
-- [数据流水线](docs/pipeline.md)
-- [失败类型定义](docs/failure_taxonomy.md)
-- [评测指标](docs/evaluation.md)
-- [训练数据导出](docs/training_data_export.md)
-- [简历描述参考](docs/resume_notes.md)
+- [Architecture](docs/architecture.md)
+- [Evaluation](docs/evaluation.md)
+- [Training Data Export](docs/training_data_export.md)
+- [Failure Taxonomy](docs/failure_taxonomy.md)
+- [Interview Guide](docs/interview_guide.md)
+- [Training Stub](docs/training_stub.md)
+- [Resume Notes](docs/resume_notes.md)

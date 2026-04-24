@@ -52,6 +52,8 @@ class EvaluationResponse(BaseModel):
     total_tasks: int
     metrics: EvaluationMetrics
     details: list[TaskEvaluationDetail]
+    self_correction_metrics: dict[str, Any] = Field(default_factory=dict)
+    failure_analysis: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
     class Config:
