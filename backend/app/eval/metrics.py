@@ -45,6 +45,27 @@ METRIC_DEFINITIONS = {
         range=(0.0, 1.0),
         higher_is_better=True,
     ),
+    "invalid_tool_call_rate": MetricDefinition(
+        name="Invalid Tool Call Rate",
+        description="非法工具调用格式占比",
+        formula="invalid_format_calls / total_tool_calls",
+        range=(0.0, 1.0),
+        higher_is_better=False,
+    ),
+    "wrong_args_rate": MetricDefinition(
+        name="Wrong Args Rate",
+        description="工具参数 Schema 错误占比",
+        formula="wrong_args_calls / total_tool_calls",
+        range=(0.0, 1.0),
+        higher_is_better=False,
+    ),
+    "policy_violation_rate": MetricDefinition(
+        name="Policy Violation Rate",
+        description="策略违规调用占比",
+        formula="policy_violation_calls / total_tool_calls",
+        range=(0.0, 1.0),
+        higher_is_better=False,
+    ),
     "avg_latency_ms": MetricDefinition(
         name="Average Latency",
         description="平均任务执行延迟（毫秒）",
@@ -88,18 +109,29 @@ def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, float]:
     successful_tasks = sum(1 for r in results if r.get("is_success"))
     task_success_rate = successful_tasks / total
 
-    # 工具执行成功率
     total_tool_calls = sum(r.get("tool_calls_count", 0) for r in results)
-    # 简化计算
-    tool_success_rate = min(0.95, task_success_rate + 0.1)
+    failures = [failure for r in results for failure in r.get("failure_types", [])]
+    tool_success_rate = (
+        max(0, total_tool_calls - len(failures)) / total_tool_calls
+        if total_tool_calls > 0
+        else 1.0
+    )
 
     # 恢复率
     total_errors = sum(1 for r in results if r.get("failure_types"))
     successful_recoveries = sum(r.get("successful_recoveries", 0) for r in results)
     recovery_rate = successful_recoveries / total_errors if total_errors > 0 else 1.0
 
-    # GUI 准确率
-    gui_action_accuracy = 0.90  # 估计值
+    total_gui_actions = sum(r.get("gui_actions_count", 0) for r in results)
+    gui_failures = [
+        failure for failure in failures
+        if failure in {"gui_click_miss", "gui_wrong_element", "gui_state_stale"}
+    ]
+    gui_action_accuracy = (
+        max(0, total_gui_actions - len(gui_failures)) / total_gui_actions
+        if total_gui_actions > 0
+        else 1.0
+    )
 
     # 平均延迟
     total_latency = sum(r.get("latency_ms", 0) for r in results)
@@ -117,7 +149,11 @@ def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, float]:
         "tool_execution_success_rate": tool_success_rate,
         "recovery_rate": recovery_rate,
         "gui_action_accuracy": gui_action_accuracy,
+        "invalid_tool_call_rate": failures.count("invalid_format") / max(len(failures), 1),
+        "wrong_args_rate": failures.count("wrong_args") / max(len(failures), 1),
+        "policy_violation_rate": failures.count("policy_violation") / max(len(failures), 1),
         "avg_latency_ms": avg_latency_ms,
+        "avg_steps": avg_steps,
         "avg_steps_per_task": avg_steps,
         "error_rate": error_rate,
     }

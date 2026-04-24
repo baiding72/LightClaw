@@ -2,6 +2,8 @@
 评测服务
 """
 from datetime import datetime
+import json
+from pathlib import Path
 from typing import Optional
 import uuid
 
@@ -28,15 +30,20 @@ class EvalService:
 
     async def run_evaluation(self, request: EvaluationRequest) -> EvaluationResponse:
         """运行评测"""
-        from app.eval import EvaluationRunner
+        if request.mode == "live":
+            from app.eval import EvaluationRunner
 
-        runner = EvaluationRunner()
-        result = await runner.run_evaluation(
-            eval_name=request.eval_name,
-            task_ids=request.task_ids,
-            categories=request.categories,
-            difficulties=request.difficulties,
-        )
+            runner = EvaluationRunner()
+            result = await runner.run_evaluation(
+                eval_name=request.eval_name,
+                task_ids=request.task_ids,
+                categories=request.categories,
+                difficulties=request.difficulties,
+            )
+        else:
+            from app.eval.deterministic import build_deterministic_evaluation
+
+            result = build_deterministic_evaluation(request.eval_name)
 
         # 保存到数据库
         eval_model = EvaluationResultModel(
@@ -56,8 +63,23 @@ class EvalService:
 
         self.db.add(eval_model)
         await self.db.commit()
+        self._write_latest_report(result, request.mode)
 
         return result
+
+    def _write_latest_report(self, result: EvaluationResponse, mode: str) -> None:
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        output_dir = Path(settings.data_dir) / "eval_reports"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        payload = result.model_dump(mode="json")
+        payload["mode"] = mode
+        payload["source"] = "deterministic_fixture" if mode != "live" else "live_agent"
+        (output_dir / "latest.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     async def get_evaluation(self, eval_id: str) -> Optional[EvaluationResponse]:
         """获取评测详情"""

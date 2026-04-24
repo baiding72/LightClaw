@@ -157,7 +157,7 @@ class TaskService:
             # 获取任务定义
             built_in_task = get_task_by_id(task_id)
             instruction = built_in_task.instruction if built_in_task else task.instruction
-            allowed_tools = built_in_task.allowed_tools if built_in_task else task.allowed_tools
+            allowed_tools = list(built_in_task.allowed_tools if built_in_task else task.allowed_tools)
 
             effective_browser_context = browser_context
             if effective_browser_context is None and task.browser_context:
@@ -171,6 +171,7 @@ class TaskService:
             if effective_browser_context:
                 selected_tab = effective_browser_context.selected_tab
                 serialized_browser_context = effective_browser_context.model_dump(mode="json")
+                page_content = (serialized_browser_context or {}).get("page_content")
                 other_tabs = [
                     f"- {tab.title or tab.url} ({tab.url})"
                     for tab in effective_browser_context.tabs
@@ -181,6 +182,10 @@ class TaskService:
                     f"当前目标标签页标题: {selected_tab.title or 'Untitled'}",
                     f"当前目标标签页 URL: {selected_tab.url}",
                 ]
+                if page_content:
+                    browser_lines.append(
+                        f"当前页正文已由插件直接提取，长度 {len(str(page_content))} 字符。必须优先分析该正文，禁止先发起网络读取。"
+                    )
                 if other_tabs:
                     browser_lines.append("同窗口其他标签页:")
                     browser_lines.extend(other_tabs)

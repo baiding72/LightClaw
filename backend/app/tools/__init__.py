@@ -19,7 +19,6 @@ from app.tools.calendar import AddCalendarEventTool, ListCalendarEventsTool
 from app.tools.calculator import CalculatorTool
 from app.tools.files import ReadFileTool
 from app.tools.notes import ReadNotesTool, WriteNoteTool
-from app.tools.search_web import OpenUrlTool, ReadPageTool, SearchWebTool
 from app.tools.todos import AddTodoTool, ListTodosTool
 
 __all__ = [
@@ -49,10 +48,6 @@ __all__ = [
     # Note tools
     "WriteNoteTool",
     "ReadNotesTool",
-    # Search tools
-    "SearchWebTool",
-    "OpenUrlTool",
-    "ReadPageTool",
     # Todo tools
     "AddTodoTool",
     "ListTodosTool",

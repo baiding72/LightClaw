@@ -1,12 +1,21 @@
 """
 健康检查 API 路由
 """
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter
 
 from app.llm import ChatMessage, get_llm_adapter
 from app.tools import get_tool_registry
 
 router = APIRouter(tags=["health"])
+_LLM_HEALTH_CACHE: dict | None = None
+_LLM_HEALTH_TTL = timedelta(seconds=60)
+
+
+def reset_llm_health_cache() -> None:
+    global _LLM_HEALTH_CACHE
+    _LLM_HEALTH_CACHE = None
 
 
 @router.get("/health")
@@ -21,6 +30,17 @@ async def health_check() -> dict:
 @router.get("/health/llm")
 async def llm_health_check() -> dict:
     """LLM 健康检查"""
+    global _LLM_HEALTH_CACHE
+
+    if _LLM_HEALTH_CACHE:
+        checked_at = _LLM_HEALTH_CACHE.get("checked_at")
+        if isinstance(checked_at, datetime) and datetime.now() - checked_at < _LLM_HEALTH_TTL:
+            return {
+                key: value
+                for key, value in _LLM_HEALTH_CACHE.items()
+                if key != "checked_at"
+            }
+
     llm = get_llm_adapter()
 
     try:
@@ -29,18 +49,38 @@ async def llm_health_check() -> dict:
             max_tokens=8,
             temperature=0,
         )
-        return {
+        payload = {
             "status": "healthy",
             "model": llm.model_name,
             "response": response.content.strip(),
             "latency_ms": response.latency_ms,
         }
+        _LLM_HEALTH_CACHE = {
+            **payload,
+            "checked_at": datetime.now(),
+        }
+        return payload
     except Exception as exc:
-        return {
+        payload = {
             "status": "unhealthy",
             "model": llm.model_name,
             "error": str(exc),
         }
+        if _LLM_HEALTH_CACHE:
+            return {
+                **{
+                    key: value
+                    for key, value in _LLM_HEALTH_CACHE.items()
+                    if key != "checked_at"
+                },
+                "status": "degraded",
+                "error": str(exc),
+            }
+        _LLM_HEALTH_CACHE = {
+            **payload,
+            "checked_at": datetime.now(),
+        }
+        return payload
 
 
 @router.get("/tools")

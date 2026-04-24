@@ -13,6 +13,10 @@ class EvaluationMetrics(BaseModel):
     tool_execution_success_rate: float = Field(..., ge=0.0, le=1.0)
     recovery_rate: float = Field(..., ge=0.0, le=1.0)
     gui_action_accuracy: float = Field(..., ge=0.0, le=1.0)
+    invalid_tool_call_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    wrong_args_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    policy_violation_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    avg_steps: float = 0.0
     avg_latency_ms: float
     total_token_cost: float = 0.0
 
@@ -35,6 +39,7 @@ class TaskEvaluationDetail(BaseModel):
 class EvaluationRequest(BaseModel):
     """评测请求"""
     eval_name: str
+    mode: str = "deterministic"
     task_ids: Optional[list[str]] = None  # None 表示运行所有任务
     categories: Optional[list[str]] = None
     difficulties: Optional[list[str]] = None

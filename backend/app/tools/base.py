@@ -147,6 +147,10 @@ class BaseTool(ABC):
                     return False, f"Parameter {param.name} must be a number"
                 elif param.type == "boolean" and not isinstance(value, bool):
                     return False, f"Parameter {param.name} must be a boolean"
+                elif param.type == "array" and not isinstance(value, list):
+                    return False, f"Parameter {param.name} must be an array"
+                elif param.type == "object" and not isinstance(value, dict):
+                    return False, f"Parameter {param.name} must be an object"
 
                 # 枚举检查
                 if param.enum and value not in param.enum:

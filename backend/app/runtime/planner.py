@@ -131,13 +131,19 @@ class Planner:
     ) -> list[dict[str, Any]]:
         tool_names = available_tools or self.tool_registry.list_tools()
         candidate_names: list[str] = []
+        selected_tab = state.browser_context.get("selected_tab") if state.browser_context else None
+        has_selected_tab = bool(selected_tab and selected_tab.get("url"))
+        if has_selected_tab:
+            for name in ["click", "type_text", "select_option", "scroll", "take_screenshot"]:
+                if name in tool_names and name not in candidate_names:
+                    candidate_names.append(name)
 
-        if not state.current_url:
-            for name in ["search_web", "open_url", "read_file"]:
+        if not candidate_names and not state.current_url:
+            for name in ["read_file", "write_note", "add_todo", "calculator"]:
                 if name in tool_names:
                     candidate_names.append(name)
-        else:
-            for name in ["read_page", "click", "type_text", "select_option", "take_screenshot", "scroll"]:
+        elif not candidate_names:
+            for name in ["click", "type_text", "select_option", "take_screenshot", "scroll", "read_file"]:
                 if name in tool_names:
                     candidate_names.append(name)
 
@@ -152,16 +158,12 @@ class Planner:
             tool = self.tool_registry.get(name)
             if not tool:
                 continue
-            if name == "search_web":
-                reason = "当前还没有稳定页面上下文，优先检索入口。"
-            elif name == "open_url":
-                reason = "需要进入具体网页才能继续任务。"
-            elif name == "read_page":
-                reason = "当前已有页面，优先读取正文或字段。"
-            elif name in {"click", "type_text", "select_option"}:
+            if name in {"click", "type_text", "select_option"}:
                 reason = "当前任务涉及页面交互或表单推进。"
             elif name == "take_screenshot":
                 reason = "需要保留界面证据或辅助观察。"
+            elif name == "scroll":
+                reason = "需要浏览更多页面内容或暴露新的交互元素。"
             else:
                 reason = f"{tool.description}"
             candidates.append({

@@ -1,0 +1,21 @@
+{
+  "active_profile_id": "profile_4d4b4f63",
+  "profiles": [
+    {
+      "profile_id": "default",
+      "name": "DeepSeek",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "base_url": "https://api.deepseek.com/v1",
+      "api_key": "sk-9be401c654a14ff7ad9c24d6c7cfbac4"
+    },
+    {
+      "profile_id": "profile_4d4b4f63",
+      "name": "Qwen",
+      "provider": "qwen",
+      "model": "qwen-vl-max",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key": "sk-38eea22c4c3745d08a3961661c64f91d"
+    }
+  ]
+}

@@ -68,6 +68,7 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
             if msg.tool_calls:
                 msg_dict["tool_calls"] = msg.tool_calls
             formatted_messages.append(msg_dict)
+        has_multimodal_content = any(isinstance(msg.get("content"), list) for msg in formatted_messages)
 
         # 准备参数
         params: dict[str, Any] = {
@@ -127,6 +128,14 @@ class OpenAICompatibleAdapter(BaseLLMAdapter):
                 )
             except Exception as e:
                 last_error = e
+                if has_multimodal_content:
+                    logger.error(
+                        "LLM vision payload failed on attempt %s/%s: %s: %s",
+                        attempt,
+                        self._retry_count,
+                        type(e).__name__,
+                        e,
+                    )
                 logger.error(
                     "LLM chat error on attempt %s/%s: %s: %s",
                     attempt,
@@ -165,3 +174,11 @@ def get_llm_adapter() -> OpenAICompatibleAdapter:
     if _llm_adapter is None:
         _llm_adapter = OpenAICompatibleAdapter()
     return _llm_adapter
+
+
+async def reset_llm_adapter() -> None:
+    """重置全局 LLM 适配器"""
+    global _llm_adapter
+    if _llm_adapter is not None:
+        await _llm_adapter.close()
+    _llm_adapter = None

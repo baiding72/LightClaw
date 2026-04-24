@@ -32,6 +32,20 @@ class JobSearchPreferences(BaseModel):
     preferred_sources: list[str] = Field(default_factory=list)
 
 
+class JobSiteProfile(BaseModel):
+    """招聘站点配置"""
+
+    site_key: str
+    display_name: str
+    domains: list[str] = Field(default_factory=list)
+    login_url_keywords: list[str] = Field(default_factory=list)
+    login_title_keywords: list[str] = Field(default_factory=list)
+    login_content_keywords: list[str] = Field(default_factory=list)
+    authenticated_content_keywords: list[str] = Field(default_factory=list)
+    application_record_url_keywords: list[str] = Field(default_factory=list)
+    application_record_content_keywords: list[str] = Field(default_factory=list)
+
+
 class JobApplicationContext(BaseModel):
     """求职投递任务上下文"""
 

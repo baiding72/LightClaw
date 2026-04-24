@@ -36,7 +36,7 @@ class LLMResponse:
 class ChatMessage:
     """聊天消息"""
     role: str  # system, user, assistant, tool
-    content: str
+    content: Any
     name: Optional[str] = None
     tool_call_id: Optional[str] = None
     tool_calls: Optional[list[dict[str, Any]]] = None

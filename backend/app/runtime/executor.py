@@ -3,6 +3,7 @@ Executor 模块
 
 负责执行工具调用
 """
+import asyncio
 import time
 from typing import Any, Optional
 
@@ -11,6 +12,7 @@ from app.core.enums import FailureType
 from app.core.logger import logger
 from app.db.session import async_session_maker
 from app.runtime.state import AgentState
+from app.schemas.action import AgentAction, AgentActionType, validate_tool_arguments
 from app.schemas.tool import ToolResult
 from app.tools import ToolContext, get_tool_registry
 
@@ -20,6 +22,9 @@ class Executor:
 
     def __init__(self):
         self.tool_registry = get_tool_registry()
+        from app.core.config import get_settings
+
+        self.settings = get_settings()
 
     async def _resolve_browser_page(
         self,
@@ -31,7 +36,7 @@ class Executor:
         if browser_page is not None:
             return browser_page
 
-        needs_browser_runtime = tool_category == "browser" or tool_name in {"open_url", "read_page"}
+        needs_browser_runtime = tool_category == "browser"
         if not needs_browser_runtime:
             return None
 
@@ -55,7 +60,6 @@ class Executor:
         should_sync_target_page = (
             page is not None
             and not state.browser_runtime_initialized
-            and tool_name != "open_url"
             and bool(target_url)
             and current_page_url in {"", "about:blank"}
         )
@@ -78,27 +82,6 @@ class Executor:
         tool_args: dict[str, Any],
         state: AgentState,
     ) -> Optional[dict[str, Any]]:
-        if tool_name == "open_url":
-            url = tool_args.get("url")
-            previous_result = state.last_tool_result or {}
-            search_results = previous_result.get("results", [])
-            if url and search_results:
-                for index, item in enumerate(search_results, start=1):
-                    if item.get("url") == url:
-                        return {
-                            "source": item.get("source") or previous_result.get("provider"),
-                            "provider": previous_result.get("provider"),
-                            "search_query": previous_result.get("query"),
-                            "effective_query": previous_result.get("effective_query"),
-                            "site": previous_result.get("site"),
-                            "rank": index,
-                            "title": item.get("title"),
-                            "url": item.get("url"),
-                        }
-
-        if tool_name == "read_page" and state.current_page_source:
-            return state.current_page_source
-
         return None
 
     async def execute(
@@ -123,6 +106,15 @@ class Executor:
             工具执行结果
         """
         start_time = time.time()
+        action = AgentAction(
+            action_type=AgentActionType.TOOL_CALL,
+            step_id=f"{state.task_id}:{state.current_step}",
+            trace_id=state.trajectory_id,
+            action_name=tool_name,
+            tool_name=tool_name,
+            arguments=tool_args if isinstance(tool_args, dict) else {},
+            status="running",
+        )
 
         # 获取工具
         tool = self.tool_registry.get(tool_name)
@@ -134,23 +126,39 @@ class Executor:
                 error_type=FailureType.WRONG_TOOL.value,
                 latency_ms=latency_ms,
             )
+            action.mark_failed(
+                error_type=FailureType.WRONG_TOOL.value,
+                error_message=result.error or "Unknown tool",
+                latency_ms=latency_ms,
+            )
+            state.add_action(action.model_dump(mode="json"))
             state.add_tool_call(tool_name, tool_args, error=result.error)
             state.add_error(FailureType.WRONG_TOOL.value, result.error)
             return result
 
         # 验证参数
-        is_valid, error_msg = tool.validate_args(tool_args)
-        if not is_valid:
+        validation = validate_tool_arguments(tool, tool_args)
+        if not validation.is_valid:
             latency_ms = int((time.time() - start_time) * 1000)
             result = ToolResult(
                 success=False,
-                error=error_msg,
-                error_type=FailureType.WRONG_ARGS.value,
+                error=validation.error_message,
+                error_type=validation.error_type,
                 latency_ms=latency_ms,
             )
-            state.add_tool_call(tool_name, tool_args, error=result.error)
-            state.add_error(FailureType.WRONG_ARGS.value, result.error)
+            action.arguments = validation.arguments
+            action.mark_failed(
+                error_type=result.error_type or FailureType.WRONG_ARGS.value,
+                error_message=result.error or "Invalid tool arguments",
+                latency_ms=latency_ms,
+            )
+            state.add_action(action.model_dump(mode="json"))
+            state.add_tool_call(tool_name, validation.arguments, error=result.error)
+            state.add_error(result.error_type or FailureType.WRONG_ARGS.value, result.error or "")
             return result
+
+        tool_args = validation.arguments
+        action.arguments = tool_args
 
         try:
             source_context = self._resolve_search_source_context(tool_name, tool_args, state)
@@ -171,7 +179,11 @@ class Executor:
                 )
 
                 # 执行工具
-                result = await tool.execute(tool_args, context)
+                timeout_seconds = max(1, int(self.settings.browser_timeout / 1000))
+                result = await asyncio.wait_for(
+                    tool.execute(tool_args, context),
+                    timeout=timeout_seconds,
+                )
 
             if result.success and isinstance(result.result, dict) and source_context:
                 result.result["source_context"] = source_context
@@ -197,6 +209,20 @@ class Executor:
             if not result.success and result.error_type:
                 state.add_error(result.error_type, result.error or "Unknown error")
 
+            if result.success:
+                action.mark_success(
+                    observation=result.result,
+                    latency_ms=result.latency_ms,
+                )
+            else:
+                action.mark_failed(
+                    error_type=result.error_type or FailureType.TOOL_RUNTIME_ERROR.value,
+                    error_message=result.error or "Unknown error",
+                    observation=result.result,
+                    latency_ms=result.latency_ms,
+                )
+            state.add_action(action.model_dump(mode="json"))
+
             # 更新延迟统计
             state.add_latency(result.latency_ms or 0)
 
@@ -221,6 +247,12 @@ class Executor:
 
             state.add_tool_call(tool_name, tool_args, error=error_msg)
             state.add_error(FailureType.TOOL_RUNTIME_ERROR.value, error_msg)
+            action.mark_failed(
+                error_type=FailureType.TOOL_RUNTIME_ERROR.value,
+                error_message=error_msg,
+                latency_ms=latency_ms,
+            )
+            state.add_action(action.model_dump(mode="json"))
 
             return result
 

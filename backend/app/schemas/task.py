@@ -26,6 +26,9 @@ class BrowserContext(BaseModel):
     captured_at: datetime
     selected_tab: BrowserTabContext
     tabs: list[BrowserTabContext] = Field(default_factory=list)
+    page_content: Optional[str] = None
+    content_format: Optional[str] = None
+    extraction_strategy: Optional[str] = None
 
 
 class TaskCreate(BaseModel):

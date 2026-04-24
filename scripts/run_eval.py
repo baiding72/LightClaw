@@ -1,68 +1,73 @@
 #!/usr/bin/env python3
-"""
-评测运行脚本
+"""Run LightClaw evaluation.
 
-运行 benchmark 并输出结果
+Default mode is deterministic and requires no LLM API key.
 """
+
+from __future__ import annotations
+
+import argparse
 import asyncio
-import sys
 import json
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
-# 添加项目路径
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "backend"))
 
-from app.eval import EvaluationRunner, ReportGenerator
-from app.tasks.definitions import ALL_TASKS
+from app.core.config import get_settings
+from app.eval.deterministic import build_deterministic_evaluation
+from app.eval.reports import ReportGenerator
+from app.eval.runner import EvaluationRunner
 
 
-async def main():
-    """主函数"""
-    print("="*60)
-    print("LightClaw Benchmark Runner")
-    print("="*60)
-
+async def run_live(eval_name: str):
     runner = EvaluationRunner()
-    report_gen = ReportGenerator()
+    return await runner.run_evaluation(eval_name=eval_name)
 
-    # 运行评测
-    eval_name = f"benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    print(f"\nRunning evaluation: {eval_name}")
-    print(f"Total tasks: {len(ALL_TASKS)}")
 
-    # 只运行部分任务作为演示
-    # 实际使用时可以去掉 categories 限制
-    result = await runner.run_evaluation(
-        eval_name=eval_name,
-        categories=["todo_calendar", "info_extraction"],
+async def main() -> None:
+    parser = argparse.ArgumentParser(description="Run LightClaw evaluation.")
+    parser.add_argument("--mode", choices=["deterministic", "live"], default="deterministic")
+    parser.add_argument("--eval-name", default=None)
+    parser.add_argument("--output-dir", default=None)
+    args = parser.parse_args()
+
+    eval_name = args.eval_name or f"{args.mode}_eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    result = (
+        await run_live(eval_name)
+        if args.mode == "live"
+        else build_deterministic_evaluation(eval_name)
     )
 
-    # 打印结果
-    print("\n" + "="*60)
-    print("Results")
-    print("="*60)
-
-    print(f"\nTask Success Rate: {result.metrics.task_success_rate:.2%}")
-    print(f"Tool Execution Success Rate: {result.metrics.tool_execution_success_rate:.2%}")
-    print(f"Recovery Rate: {result.metrics.recovery_rate:.2%}")
-    print(f"GUI Action Accuracy: {result.metrics.gui_action_accuracy:.2%}")
-    print(f"Average Latency: {result.metrics.avg_latency_ms:.0f}ms")
-
-    # 生成报告
-    print("\nGenerating report...")
-    report = report_gen.generate_markdown_report(result)
-    print(report)
-
-    # 保存结果
-    output_dir = Path("data/eval")
+    settings = get_settings()
+    output_dir = Path(args.output_dir or Path(settings.data_dir) / "eval_reports")
     output_dir.mkdir(parents=True, exist_ok=True)
+    latest_json = output_dir / "latest.json"
+    latest_md = output_dir / "latest.md"
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_file = output_dir / f"report_{timestamp}.md"
-    report_file.write_text(report, encoding="utf-8")
+    payload = result.model_dump(mode="json")
+    payload["mode"] = args.mode
+    payload["source"] = "deterministic_fixture" if args.mode == "deterministic" else "live_agent"
+    latest_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"\nReport saved to: {report_file}")
+    report = ReportGenerator(output_dir=str(output_dir)).generate_markdown_report(result)
+    latest_md.write_text(report, encoding="utf-8")
+
+    print("=" * 60)
+    print(f"LightClaw Evaluation ({args.mode})")
+    print("=" * 60)
+    print(f"Task success rate: {result.metrics.task_success_rate:.2%}")
+    print(f"Tool execution success rate: {result.metrics.tool_execution_success_rate:.2%}")
+    print(f"Recovery rate: {result.metrics.recovery_rate:.2%}")
+    print(f"Invalid tool call rate: {result.metrics.invalid_tool_call_rate:.2%}")
+    print(f"Wrong args rate: {result.metrics.wrong_args_rate:.2%}")
+    print(f"Policy violation rate: {result.metrics.policy_violation_rate:.2%}")
+    print(f"GUI grounding accuracy: {result.metrics.gui_action_accuracy:.2%}")
+    print(f"Average steps: {result.metrics.avg_steps:.2f}")
+    print(f"Average latency: {result.metrics.avg_latency_ms:.0f}ms")
+    print(f"Report: {latest_json}")
 
 
 if __name__ == "__main__":

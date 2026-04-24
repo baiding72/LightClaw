@@ -10,6 +10,12 @@ from app.schemas.datapool import (
     SelfCorrectionSample,
     ToolUseSample,
 )
+from app.schemas.action import (
+    AgentAction,
+    AgentActionStatus,
+    AgentActionType,
+    ToolArgumentValidation,
+)
 from app.schemas.eval import (
     DashboardStats,
     EvaluationListResponse,
@@ -19,6 +25,13 @@ from app.schemas.eval import (
     EvaluationSummary,
     FailureDistribution,
     TaskEvaluationDetail,
+)
+from app.schemas.gui_agent import (
+    ActionExecutionResult,
+    AgentDecision,
+    AgentLoopResult,
+    GuiDecisionRequest,
+    Observation,
 )
 from app.schemas.task import (
     TaskCreate,
@@ -48,6 +61,10 @@ from app.schemas.trajectory import (
 
 __all__ = [
     # Task
+    "AgentAction",
+    "AgentActionStatus",
+    "AgentActionType",
+    "ToolArgumentValidation",
     "TaskCreate",
     "TaskUpdate",
     "TaskResponse",
@@ -89,4 +106,10 @@ __all__ = [
     "EvaluationListResponse",
     "FailureDistribution",
     "DashboardStats",
+    # GUI Agent
+    "Observation",
+    "GuiDecisionRequest",
+    "AgentDecision",
+    "ActionExecutionResult",
+    "AgentLoopResult",
 ]

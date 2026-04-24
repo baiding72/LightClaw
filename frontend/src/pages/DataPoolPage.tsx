@@ -39,7 +39,7 @@ export default function DataPoolPage() {
       setTotal(samplesRes.data.total)
       setStats(statsRes.data)
     } catch (error) {
-      console.error('Failed to load data:', error)
+      console.error('加载数据池失败:', error)
     } finally {
       setLoading(false)
     }
@@ -50,56 +50,56 @@ export default function DataPoolPage() {
       await api.post('/datapool/export', {
         output_format: 'jsonl',
       })
-      alert('Export started!')
+      alert('已开始导出样本。')
       loadData()
     } catch (error) {
-      console.error('Failed to export:', error)
+      console.error('导出样本失败:', error)
     }
   }
 
   const buildFromTrajectories = async () => {
     try {
       await api.post('/datapool/build')
-      alert('Building samples from trajectories...')
+      alert('已开始从轨迹构建样本。')
       loadData()
     } catch (error) {
-      console.error('Failed to build:', error)
+      console.error('构建样本失败:', error)
     }
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-500">Loading...</div>
+    return <div className="text-center py-8 text-gray-500">加载中...</div>
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">DataPool</h2>
+      <h2 className="text-xl font-semibold text-gray-900">数据池</h2>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Total Samples</div>
+          <div className="text-sm font-medium text-gray-500">样本总数</div>
           <div className="mt-2 text-3xl font-bold text-gray-900">
             {stats?.total_samples || 0}
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Tool-use</div>
+          <div className="text-sm font-medium text-gray-500">工具调用</div>
           <div className="mt-2 text-3xl font-bold text-blue-600">
             {stats?.by_type?.tool_use || 0}
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Self-correction</div>
+          <div className="text-sm font-medium text-gray-500">自纠错</div>
           <div className="mt-2 text-3xl font-bold text-purple-600">
             {stats?.by_type?.self_correction || 0}
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">GUI Grounding</div>
+          <div className="text-sm font-medium text-gray-500">GUI 定位</div>
           <div className="mt-2 text-3xl font-bold text-green-600">
             {stats?.by_type?.gui_grounding || 0}
           </div>
@@ -113,13 +113,13 @@ export default function DataPoolPage() {
             onClick={buildFromTrajectories}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            Build from Trajectories
+            从轨迹构建
           </button>
           <button
             onClick={exportSamples}
             className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
           >
-            Export Samples
+            导出样本
           </button>
         </div>
       </div>
@@ -130,22 +130,22 @@ export default function DataPoolPage() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Sample ID
+                样本 ID
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Type
+                类型
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Trajectory
+                轨迹类型
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Task
+                任务
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Failure Type
+                失败类型
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
+                创建时间
               </th>
             </tr>
           </thead>
@@ -183,7 +183,7 @@ export default function DataPoolPage() {
 
         {samples.length === 0 && (
           <div className="text-center py-8 text-gray-500">
-            No samples yet. Run some tasks to generate data.
+            还没有样本。先运行一些任务来生成数据。
           </div>
         )}
       </div>
@@ -196,15 +196,15 @@ export default function DataPoolPage() {
             disabled={page === 1}
             className="px-4 py-2 border rounded-md disabled:opacity-50"
           >
-            Previous
+            上一页
           </button>
-          <span className="px-4 py-2">Page {page}</span>
+          <span className="px-4 py-2">第 {page} 页</span>
           <button
             onClick={() => setPage(p => p + 1)}
             disabled={page * 20 >= total}
             className="px-4 py-2 border rounded-md disabled:opacity-50"
           >
-            Next
+            下一页
           </button>
         </div>
       )}

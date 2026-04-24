@@ -1,0 +1,69 @@
+{
+  "eval_id": "eval_302b0e7c",
+  "eval_name": "deterministic_eval_20260425_043553",
+  "total_tasks": 3,
+  "metrics": {
+    "task_success_rate": 1.0,
+    "tool_execution_success_rate": 0.75,
+    "recovery_rate": 1.0,
+    "gui_action_accuracy": 1.0,
+    "invalid_tool_call_rate": 0.0,
+    "wrong_args_rate": 0.25,
+    "policy_violation_rate": 0.0,
+    "avg_steps": 1.3333333333333333,
+    "avg_latency_ms": 9.333333333333334,
+    "total_token_cost": 0.0
+  },
+  "details": [
+    {
+      "task_id": "fixture_tool_use_success",
+      "instruction": "创建一个待办：明天复查简历。",
+      "is_success": true,
+      "steps_count": 1,
+      "tool_calls_count": 1,
+      "gui_actions_count": 0,
+      "failure_types": [],
+      "recovery_attempts": 0,
+      "successful_recoveries": 0,
+      "latency_ms": 12,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_wrong_args_repair",
+      "instruction": "写一条笔记，标题是投递总结，内容是已投递 2 个岗位。",
+      "is_success": true,
+      "steps_count": 2,
+      "tool_calls_count": 2,
+      "gui_actions_count": 0,
+      "failure_types": [
+        "wrong_args"
+      ],
+      "recovery_attempts": 1,
+      "successful_recoveries": 1,
+      "latency_ms": 13,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_gui_grounding_click",
+      "instruction": "点击保存按钮。",
+      "is_success": true,
+      "steps_count": 1,
+      "tool_calls_count": 0,
+      "gui_actions_count": 1,
+      "failure_types": [],
+      "recovery_attempts": 0,
+      "successful_recoveries": 0,
+      "latency_ms": 3,
+      "token_usage": {
+        "total": 0
+      }
+    }
+  ],
+  "created_at": "2026-04-25T04:35:53.020887",
+  "mode": "deterministic",
+  "source": "deterministic_fixture"
+}

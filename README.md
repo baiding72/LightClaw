@@ -1,55 +1,38 @@
 # LightClaw：面向个人效率管理的在线自进化轻量智能体
 
-一个轻量级的 MiniClaw 风格 Agent 系统，支持在线轨迹回流、数据池管理、定向增强数据导出、统一评测和前端可视化展示。
+LightClaw 是一个本地可运行的轻量 Agent Runtime 项目，重点展示 Tool-use、Self-correction、GUI Grounding baseline、轨迹回流、评测和后训练数据导出。项目保持 FastAPI + React + SQLite 架构，核心测试和 deterministic demo 不依赖真实 LLM API key。
 
-## 系统能力
+## 已实现能力
 
-- **Agent Runtime**: MiniClaw 风格轻量 runtime，包含 planning、acting、observing、retry、replan
-- **工具系统**: 搜索、浏览器、文件、笔记、待办、日历等工具
-- **轨迹回流**: 记录 tool call、GUI observation、error trace
-- **数据池**: 成功/失败/修复轨迹管理，样本切分与导出
-- **评测框架**: task_success_rate、tool_execution_success_rate、recovery_rate、gui_action_accuracy
-- **前端可视化**: Dashboard、TaskRunner、Memory、DataPool、Evaluation 页面
+- **统一 Action Schema**：用 Pydantic 表达 `tool_call`、`ask_user`、`final_answer`、`revise/self_correction`、`gui_click/gui_grounding`。
+- **Tool-use Executor**：工具参数校验、非法格式归因、运行异常捕获、超时控制、latency 统计和 action logging。
+- **Self-correction 数据轨迹**：支持 `attempt -> feedback/error -> revised action` 的修复轨迹表达，可导出 DPO chosen/rejected pair。
+- **Rule-based Verifier / Reward**：输出 task success、tool correctness、argument correctness、recovery、GUI hit、policy/redundancy penalty、latency proxy 等 breakdown。
+- **GUI Grounding Baseline**：基于 DOM/selector candidates 的 rule-based selector/bbox/click point baseline，并提供 point-in-box、bbox IoU、GUI action accuracy 指标。
+- **训练数据导出**：从真实轨迹或 deterministic fixtures 导出 SFT / DPO / GRPO JSONL。
+- **Deterministic Eval**：无需 LLM key，稳定生成 `backend/data/eval_reports/latest.json`。
+- **前端可视化**：Dashboard、Task Runner、DataPool、Evaluation 页面；Evaluation 页面可读取最新本地评测报告。
 
-## 技术选型
-
-### 后端
-- Python 3.11
-- FastAPI + Pydantic
-- SQLAlchemy + SQLite
-- Playwright（浏览器自动化）
-- uv 包管理
-
-### 前端
-- React + TypeScript
-- Vite
-- Tailwind CSS
-
-## 本地启动
-
-### 环境准备
-
-```bash
-# 安装 uv（Python 包管理器）
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 安装 Node.js（前端）
-# 参考 https://nodejs.org/
-```
-
-### 后端启动
+## 可运行 Demo
 
 ```bash
 cd backend
 uv sync
-cp .env.example .env
-# 编辑 .env 配置 LLM API
-uv run python -m app.main
+
+# 运行 deterministic demo，生成轨迹
+uv run python ../scripts/run_demo_tasks.py --mock
+
+# 运行 deterministic eval，生成 backend/data/eval_reports/latest.json
+uv run python ../scripts/run_eval.py --mode deterministic
+
+# 导出 SFT / DPO / GRPO 数据
+uv run python ../scripts/export_training_data.py --fixtures
+
+# 后端测试
+uv run --with pytest --with pytest-asyncio pytest
 ```
 
-后端 API 运行在 http://localhost:8000
-
-### 前端启动
+前端：
 
 ```bash
 cd frontend
@@ -57,65 +40,43 @@ npm install
 npm run dev
 ```
 
-前端运行在 http://localhost:5173
-
-### 运行演示任务
+后端：
 
 ```bash
-cd scripts
-uv run python run_demo_tasks.py
+cd backend
+uv run python -m app.main
 ```
 
-### 运行评测
-
-```bash
-cd scripts
-uv run python run_eval.py
-```
+默认后端端口仍是 `8000`。如果本机已有服务占用 8000，请通过现有 `VITE_API_PROXY_TARGET` 或本地启动脚本切到其他端口。
 
 ## 目录说明
 
-```
-lightclaw/
-├── backend/           # Python 后端
-│   ├── app/
-│   │   ├── api/       # FastAPI 路由
-│   │   ├── core/      # 配置、枚举、日志
-│   │   ├── db/        # 数据库模型
-│   │   ├── schemas/   # Pydantic 模型
-│   │   ├── llm/       # LLM 适配器
-│   │   ├── runtime/   # Agent 运行时
-│   │   ├── memory/    # 记忆系统
-│   │   ├── tools/     # 工具实现
-│   │   ├── browser/   # 浏览器自动化
-│   │   ├── gateway/   # 日志收集
-│   │   ├── datapool/  # 数据池
-│   │   ├── tasks/     # 任务定义
-│   │   ├── eval/      # 评测框架
-│   │   └── training/  # 训练数据导出
-│   └── tests/         # 测试
-├── frontend/          # React 前端
-├── scripts/           # 工具脚本
-├── data/              # 数据存储
-├── docs/              # 文档
-└── examples/          # 演示示例
+```text
+backend/app/runtime/        Agent loop、executor、observer、recovery
+backend/app/schemas/        Pydantic schemas，包括统一 action schema
+backend/app/tools/          本地工具与浏览器动作工具
+backend/app/gateway/        JSONL 轨迹事件记录
+backend/app/eval/           deterministic eval、reward、report
+backend/app/gui_grounding/  GUI grounding baseline 与指标
+backend/app/training/       SFT/DPO/GRPO export helpers
+frontend/src/pages/         React 可视化页面
+scripts/                    demo、eval、export、校验脚本
+docs/                       架构、评测、导出和简历说明
 ```
 
-## 示例任务
+## 当前限制
 
-项目内置 20+ 任务，覆盖：
+- deterministic eval 使用固定 fixtures，只用于本地验证链路，不代表真实生产指标。
+- GUI Grounding 目前是 selector/rule-based baseline，不是完整 OSWorld/Android Agent。
+- 项目支持 OpenAI-compatible LLM 配置，但核心测试不依赖真实 key；live Agent 效果取决于模型和网页环境。
+- 当前没有真实微调训练流程，只导出可供 TRL / verl / LLaMA-Factory 等框架继续使用的数据。
 
-- **信息整理类**: 从网页提取信息写入笔记
-- **待办/日程管理类**: 创建待办、日历事件
-- **网页表单交互类**: 填写表单、提交数据
-- **跨工具多步任务类**: 搜索 → 提取 → 创建 → 写入
+## 后续路线
 
-## 当前局限
-
-1. 搜索工具为 mock 实现，未接入真实搜索引擎
-2. LLM 需要配置 OpenAI-compatible API
-3. 训练数据导出已实现，但未接入真实微调流程
-4. GUI grounding 使用简单 selector，未实现视觉定位
+- 接入更多真实轨迹，扩展 verifier 和 reward 权重。
+- 将浏览器插件产生的 SoM screenshot + DOM observation 纳入 GUI grounding 数据集。
+- 增加真实网页任务的 replay/eval fixture。
+- 在外部训练框架中验证导出的 SFT/DPO/GRPO 数据。
 
 ## 文档
 
@@ -124,4 +85,4 @@ lightclaw/
 - [失败类型定义](docs/failure_taxonomy.md)
 - [评测指标](docs/evaluation.md)
 - [训练数据导出](docs/training_data_export.md)
-- [开发路线图](docs/roadmap.md)
+- [简历描述参考](docs/resume_notes.md)

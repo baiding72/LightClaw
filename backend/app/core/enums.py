@@ -53,6 +53,9 @@ class FailureType(str, Enum):
     - state_loss_after_navigation: 页面跳转后状态丢失
     - planning_error: 规划错误
     - observation_error: 观察错误
+    - invalid_format: 工具调用格式错误（例如非法 JSON 或非对象参数）
+    - policy_violation: 违反运行时策略
+    - redundant_tool_call: 冗余工具调用
     - repair_success: 修复成功
     - repair_failed: 修复失败
     """
@@ -65,6 +68,9 @@ class FailureType(str, Enum):
     STATE_LOSS_AFTER_NAVIGATION = "state_loss_after_navigation"
     PLANNING_ERROR = "planning_error"
     OBSERVATION_ERROR = "observation_error"
+    INVALID_FORMAT = "invalid_format"
+    POLICY_VIOLATION = "policy_violation"
+    REDUNDANT_TOOL_CALL = "redundant_tool_call"
     REPAIR_SUCCESS = "repair_success"
     REPAIR_FAILED = "repair_failed"
 
@@ -84,6 +90,7 @@ class FailureType(str, Enum):
         return failure_type in [
             cls.WRONG_TOOL,
             cls.WRONG_ARGS,
+            cls.INVALID_FORMAT,
             cls.TOOL_RUNTIME_ERROR,
             cls.GUI_CLICK_MISS,
             cls.GUI_STATE_STALE,

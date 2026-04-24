@@ -35,8 +35,10 @@ class AgentState:
     successful_recoveries: int = 0
 
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    actions: list[dict[str, Any]] = field(default_factory=list)
     gui_actions: list[dict[str, Any]] = field(default_factory=list)
     errors: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[dict[str, Any]] = field(default_factory=list)
 
     observations: list[str] = field(default_factory=list)
     thoughts: list[str] = field(default_factory=list)
@@ -44,6 +46,7 @@ class AgentState:
     current_url: Optional[str] = None
     current_page_title: Optional[str] = None
     current_page_source: Optional[dict[str, Any]] = None
+    current_site_profile: Optional[dict[str, Any]] = None
     last_tool_result: Optional[dict[str, Any]] = None
     browser_context: Optional[dict[str, Any]] = None
     scenario_type: Optional[str] = None
@@ -74,6 +77,7 @@ class AgentState:
 
     def refresh_memory_summary(self) -> None:
         selected_tab = self.browser_context.get("selected_tab") if self.browser_context else None
+        page_content = (self.browser_context or {}).get("page_content")
         self.memory_summary = {
             "goal": self.current_goal or self.instruction,
             "subgoal": self.current_subgoal,
@@ -82,10 +86,17 @@ class AgentState:
                 "title": selected_tab.get("title"),
                 "url": selected_tab.get("url"),
             } if selected_tab else None,
+            "browser_page_content": {
+                "available": bool(page_content),
+                "length": len(str(page_content or "")),
+                "format": (self.browser_context or {}).get("content_format"),
+                "strategy": (self.browser_context or {}).get("extraction_strategy"),
+            } if self.browser_context else None,
             "current_page": {
                 "title": self.current_page_title,
                 "url": self.current_url,
                 "source": self.current_page_source,
+                "site_profile": self.current_site_profile,
             } if self.current_url or self.current_page_title else None,
             "expected_result": self.expected_result,
             "last_observation": self.observations[-1] if self.observations else None,
@@ -97,6 +108,7 @@ class AgentState:
             } if self.active_checkpoint else None,
             "checkpoint_count": len(self.checkpoints),
             "error_count": len(self.errors),
+            "warning_count": len(self.warnings),
         }
 
     def get_environment_snapshot(self) -> dict[str, Any]:
@@ -106,8 +118,11 @@ class AgentState:
             "current_url": self.current_url,
             "current_page_title": self.current_page_title,
             "current_page_source": self.current_page_source,
+            "current_site_profile": self.current_site_profile,
             "selected_tab": selected_tab,
             "tabs": tabs,
+            "page_content_available": bool((self.browser_context or {}).get("page_content")),
+            "page_content_length": len(str((self.browser_context or {}).get("page_content", "") or "")),
             "scenario_type": self.scenario_type,
             "scenario_context": self.scenario_context,
         }
@@ -139,6 +154,12 @@ class AgentState:
                 for tab in self.browser_context["tabs"][:5]
             ]
             parts.append("可用标签页: " + " | ".join(tab_summaries))
+
+        if self.browser_context and self.browser_context.get("page_content"):
+            parts.append(
+                "浏览器已提取当前页正文: "
+                f"{len(str(self.browser_context.get('page_content') or ''))} 字符"
+            )
 
         if self.current_page_source:
             source_name = self.current_page_source.get("source") or self.current_page_source.get("provider")
@@ -288,6 +309,11 @@ class AgentState:
         self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
+    def add_action(self, action: dict[str, Any]) -> None:
+        self.actions.append(action)
+        self.refresh_memory_summary()
+        self.updated_at = datetime.now()
+
     def add_gui_action(
         self,
         action_type: str,
@@ -316,6 +342,21 @@ class AgentState:
             "step": step or self.current_step,
             "type": error_type,
             "message": error_message,
+            "timestamp": datetime.now().isoformat(),
+        })
+        self.refresh_memory_summary()
+        self.updated_at = datetime.now()
+
+    def add_warning(
+        self,
+        warning_type: str,
+        warning_message: str,
+        step: Optional[int] = None,
+    ) -> None:
+        self.warnings.append({
+            "step": step or self.current_step,
+            "type": warning_type,
+            "message": warning_message,
             "timestamp": datetime.now().isoformat(),
         })
         self.refresh_memory_summary()
@@ -366,6 +407,42 @@ class AgentState:
         self.refresh_memory_summary()
         self.updated_at = datetime.now()
 
+    def is_current_page_task(self) -> bool:
+        instruction = self.instruction or ""
+        return any(
+            keyword in instruction
+            for keyword in ["当前页面", "读取当前", "当前美团招聘页面", "当前标签页", "当前网页"]
+        )
+
+    def requires_application_evidence(self) -> bool:
+        instruction = self.instruction or ""
+        return any(
+            keyword in instruction
+            for keyword in ["已投递", "投递记录", "岗位名称", "投递状态", "投递时间", "申请记录"]
+        )
+
+    def has_application_evidence(self) -> bool:
+        target_keywords = ["已投递", "投递记录", "申请记录", "我的申请", "个人中心"]
+        field_keywords = ["岗位", "职位", "状态", "时间", "日期"]
+        for call in reversed(self.tool_calls):
+            if call.get("error"):
+                continue
+            result = call.get("result") or {}
+            application_records = result.get("application_records")
+            if isinstance(application_records, list) and application_records:
+                return True
+            content = str(result.get("content", "")).strip()
+            if not content:
+                continue
+            if any(keyword in content for keyword in target_keywords) and any(
+                keyword in content for keyword in field_keywords
+            ):
+                return True
+        return False
+
+    def has_browser_page_content(self) -> bool:
+        return bool((self.browser_context or {}).get("page_content"))
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
@@ -378,13 +455,16 @@ class AgentState:
             "retry_count": self.retry_count,
             "successful_recoveries": self.successful_recoveries,
             "tool_calls": self.tool_calls,
+            "actions": self.actions,
             "gui_actions": self.gui_actions,
             "errors": self.errors,
+            "warnings": self.warnings,
             "observations": self.observations,
             "thoughts": self.thoughts,
             "current_url": self.current_url,
             "current_page_title": self.current_page_title,
             "current_page_source": self.current_page_source,
+            "current_site_profile": self.current_site_profile,
             "last_tool_result": self.last_tool_result,
             "browser_context": self.browser_context,
             "scenario_type": self.scenario_type,
@@ -423,13 +503,16 @@ class AgentState:
             retry_count=payload.get("retry_count", 0),
             successful_recoveries=payload.get("successful_recoveries", 0),
             tool_calls=payload.get("tool_calls", []),
+            actions=payload.get("actions", []),
             gui_actions=payload.get("gui_actions", []),
             errors=payload.get("errors", []),
+            warnings=payload.get("warnings", []),
             observations=payload.get("observations", []),
             thoughts=payload.get("thoughts", []),
             current_url=payload.get("current_url"),
             current_page_title=payload.get("current_page_title"),
             current_page_source=payload.get("current_page_source"),
+            current_site_profile=payload.get("current_site_profile"),
             last_tool_result=payload.get("last_tool_result"),
             browser_context=payload.get("browser_context"),
             scenario_type=payload.get("scenario_type"),

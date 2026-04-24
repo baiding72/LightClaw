@@ -1,88 +1,70 @@
 #!/usr/bin/env python3
-"""
-演示任务运行脚本
+"""Run deterministic LightClaw demo trajectories without an LLM API key."""
 
-运行几个演示任务，生成轨迹和数据
-"""
-import asyncio
+from __future__ import annotations
+
+import argparse
+import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
-# 添加项目路径
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "backend"))
 
-from app.runtime import Agent
-from app.tasks.definitions import (
-    INFO_EXTRACTION_TASKS,
-    TODO_CALENDAR_TASKS,
-    MULTI_STEP_TASKS,
-)
+from app.core.config import get_settings
+from app.eval.deterministic import build_demo_action_trajectories
 
 
-async def run_demo_task(task_definition) -> dict:
-    """运行单个演示任务"""
-    print(f"\n{'='*60}")
-    print(f"Running: {task_definition.task_id}")
-    print(f"Instruction: {task_definition.instruction[:80]}...")
-    print(f"{'='*60}")
+def write_fixture_trajectories(output_dir: Path) -> list[Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    for item in build_demo_action_trajectories():
+        path = output_dir / f"trajectory_{item['task_id']}_{timestamp}.jsonl"
+        with path.open("w", encoding="utf-8") as handle:
+            handle.write(json.dumps({
+                "event_type": "task",
+                "task_id": item["task_id"],
+                "user_instruction": item["instruction"],
+                "source": "deterministic_fixture",
+                "timestamp": datetime.now().isoformat(),
+            }, ensure_ascii=False) + "\n")
+            for index, action in enumerate(item["actions"], start=1):
+                handle.write(json.dumps({
+                    "event_type": "step",
+                    "event_id": action["step_id"],
+                    "task_id": item["task_id"],
+                    "trajectory_id": action["trace_id"],
+                    "step_index": index,
+                    "chosen_tool": action.get("tool_name"),
+                    "tool_args": action.get("arguments"),
+                    "error_type": action.get("error_type"),
+                    "error_message": action.get("error_message"),
+                    "latency_ms": action.get("latency_ms"),
+                    "observation": action.get("observation"),
+                    "action": action,
+                    "timestamp": datetime.now().isoformat(),
+                }, ensure_ascii=False) + "\n")
+        written.append(path)
+    return written
 
-    agent = Agent(task_id=f"demo_{task_definition.task_id}")
 
-    try:
-        result = await agent.run(
-            instruction=task_definition.instruction,
-            allowed_tools=task_definition.allowed_tools,
-            task_definition=task_definition,
-        )
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run deterministic LightClaw demo tasks.")
+    parser.add_argument("--mock", action="store_true", help="Use deterministic fixtures. This is the default.")
+    parser.add_argument("--output-dir", default=None)
+    args = parser.parse_args()
 
-        print(f"\nResult: {'✓ Success' if result.get('success') else '✗ Failed'}")
-        print(f"Steps: {result.get('total_steps', 0)}")
-        print(f"Tokens: {result.get('total_tokens', 0)}")
+    settings = get_settings()
+    output_dir = Path(args.output_dir or settings.trajectories_dir)
+    written = write_fixture_trajectories(output_dir)
 
-        return result
-
-    except Exception as e:
-        print(f"\n✗ Error: {e}")
-        return {"success": False, "error": str(e)}
-
-    finally:
-        await agent.close()
-
-
-async def main():
-    """主函数"""
-    print("="*60)
-    print("LightClaw Demo Tasks Runner")
-    print("="*60)
-
-    # 选择几个演示任务
-    demo_tasks = [
-        TODO_CALENDAR_TASKS[0],  # 简单待办
-        TODO_CALENDAR_TASKS[1],  # 简单日历
-        MULTI_STEP_TASKS[3],     # 计算并写入笔记
-    ]
-
-    results = []
-
-    for task in demo_tasks:
-        result = await run_demo_task(task)
-        results.append({
-            "task_id": task.task_id,
-            "success": result.get("success", False),
-        })
-
-    # 打印汇总
-    print("\n" + "="*60)
-    print("Summary")
-    print("="*60)
-
-    success_count = sum(1 for r in results if r["success"])
-    print(f"Total: {len(results)}")
-    print(f"Success: {success_count}")
-    print(f"Failed: {len(results) - success_count}")
-
-    print("\nDemo tasks completed!")
+    print("LightClaw deterministic demo completed.")
+    print(f"Trajectories written: {len(written)}")
+    for path in written:
+        print(f"- {path}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

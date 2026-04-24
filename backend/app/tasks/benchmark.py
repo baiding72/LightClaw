@@ -218,10 +218,14 @@ class BenchmarkRunner:
         successful_tasks = sum(1 for r in results if r.get("is_success"))
         task_success_rate = successful_tasks / total
 
-        # 工具执行成功率
+        # 工具执行成功率：基于当前 run 记录，不使用估计值。
         total_tool_calls = sum(r.get("tool_calls_count", 0) for r in results)
-        # 简化：假设所有工具调用都成功
-        tool_execution_success_rate = 0.85  # 估计值
+        failed_tool_calls = sum(len(r.get("failure_types", [])) for r in results)
+        tool_execution_success_rate = (
+            max(0, total_tool_calls - failed_tool_calls) / total_tool_calls
+            if total_tool_calls > 0
+            else 1.0
+        )
 
         # 恢复率
         total_recovery_attempts = sum(r.get("recovery_attempts", 0) for r in results)
@@ -232,19 +236,44 @@ class BenchmarkRunner:
             else 1.0
         )
 
-        # GUI 动作准确率
+        # GUI 动作准确率：没有 GUI action 时不惩罚。
         total_gui_actions = sum(r.get("gui_actions_count", 0) for r in results)
-        gui_action_accuracy = 0.90 if total_gui_actions > 0 else 1.0  # 估计值
+        gui_failures = sum(
+            1
+            for r in results
+            for failure in r.get("failure_types", [])
+            if failure in {"gui_click_miss", "gui_wrong_element", "gui_state_stale"}
+        )
+        gui_action_accuracy = (
+            max(0, total_gui_actions - gui_failures) / total_gui_actions
+            if total_gui_actions > 0
+            else 1.0
+        )
 
         # 平均延迟
         total_latency = sum(r.get("latency_ms", 0) for r in results)
         avg_latency_ms = total_latency / total if total > 0 else 0.0
+        total_steps = sum(r.get("steps_count", 0) for r in results)
+        total_failures = max(sum(len(r.get("failure_types", [])) for r in results), 1)
+        invalid_tool_calls = sum(
+            1 for r in results for failure in r.get("failure_types", []) if failure == "invalid_format"
+        )
+        wrong_args = sum(
+            1 for r in results for failure in r.get("failure_types", []) if failure == "wrong_args"
+        )
+        policy_violations = sum(
+            1 for r in results for failure in r.get("failure_types", []) if failure == "policy_violation"
+        )
 
         return EvaluationMetrics(
             task_success_rate=task_success_rate,
             tool_execution_success_rate=tool_execution_success_rate,
             recovery_rate=recovery_rate,
             gui_action_accuracy=gui_action_accuracy,
+            invalid_tool_call_rate=invalid_tool_calls / total_failures,
+            wrong_args_rate=wrong_args / total_failures,
+            policy_violation_rate=policy_violations / total_failures,
+            avg_steps=total_steps / total if total else 0.0,
             avg_latency_ms=avg_latency_ms,
             total_token_cost=0.0,  # TODO: 实际计算
         )

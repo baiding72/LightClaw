@@ -8,12 +8,12 @@ import ApplicationsPage from './pages/ApplicationsPage'
 
 function App() {
   const navItems = [
-    { to: '/', label: 'Dashboard', icon: '📊' },
-    { to: '/applications', label: 'Applications', icon: '🧭' },
-    { to: '/tasks', label: 'Task Runner', icon: '🤖' },
-    { to: '/memory', label: 'Memory', icon: '🧠' },
-    { to: '/datapool', label: 'DataPool', icon: '📦' },
-    { to: '/eval', label: 'Evaluation', icon: '📈' },
+    { to: '/', label: '总览', icon: '📊' },
+    { to: '/applications', label: '投递追踪', icon: '🧭' },
+    { to: '/tasks', label: '任务执行器', icon: '🤖' },
+    { to: '/memory', label: '记忆', icon: '🧠' },
+    { to: '/datapool', label: '数据池', icon: '📦' },
+    { to: '/eval', label: '评测', icon: '📈' },
   ]
 
   return (

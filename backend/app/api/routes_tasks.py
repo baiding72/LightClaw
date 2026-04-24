@@ -100,7 +100,7 @@ async def delete_task(
 @router.get("/built-in/list")
 async def list_built_in_tasks() -> list[dict]:
     """列出内置任务"""
-    from app.tasks.definitions import ALL_TASKS
+    from app.tasks.definitions import get_gui_tasks
     return [
         {
             "task_id": t.task_id,
@@ -109,5 +109,5 @@ async def list_built_in_tasks() -> list[dict]:
             "difficulty": t.difficulty.value,
             "allowed_tools": t.allowed_tools,
         }
-        for t in ALL_TASKS
+        for t in get_gui_tasks()
     ]

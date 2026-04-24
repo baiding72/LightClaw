@@ -8,6 +8,7 @@ from typing import Any, Optional
 from app.core.logger import logger
 from app.llm import ChatMessage, get_llm_adapter
 from app.llm.prompts import OBSERVATION_PROMPT
+from app.scenarios import detect_job_site_profile
 from app.runtime.state import AgentState
 from app.schemas.tool import ToolResult
 
@@ -126,6 +127,16 @@ class Observer:
             state.current_page_title = result["title"]
         if "source_context" in result:
             state.current_page_source = result["source_context"]
+        if state.current_url:
+            profile = detect_job_site_profile(state.current_url)
+            state.current_site_profile = (
+                {
+                    "site_key": profile.site_key,
+                    "display_name": profile.display_name,
+                }
+                if profile
+                else None
+            )
 
         # 记录最后结果
         state.last_tool_result = result

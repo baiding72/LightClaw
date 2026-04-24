@@ -1,5 +1,5 @@
 from app.llm.base import BaseLLMAdapter, ChatMessage, LLMResponse, LLMUsage
-from app.llm.openai_compatible import OpenAICompatibleAdapter, get_llm_adapter
+from app.llm.openai_compatible import OpenAICompatibleAdapter, get_llm_adapter, reset_llm_adapter
 from app.llm.prompts import (
     OBSERVATION_PROMPT,
     PLANNING_PROMPT,
@@ -16,6 +16,7 @@ __all__ = [
     "LLMUsage",
     "OpenAICompatibleAdapter",
     "get_llm_adapter",
+    "reset_llm_adapter",
     "SYSTEM_PROMPT",
     "PLANNING_PROMPT",
     "REFLECTION_PROMPT",

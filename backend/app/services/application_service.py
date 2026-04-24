@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ApplicationModel
+from app.scenarios import detect_job_site_profile
 from app.schemas.job_application import (
     ApplicationCreate,
     ApplicationListResponse,
@@ -22,7 +23,21 @@ class ApplicationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    def _build_metadata(self, payload_metadata: dict | None, source_url: str | None) -> dict:
+        metadata = dict(payload_metadata or {})
+        profile = detect_job_site_profile(source_url)
+        if profile:
+            metadata.setdefault(
+                "site_profile",
+                {
+                    "site_key": profile.site_key,
+                    "display_name": profile.display_name,
+                },
+            )
+        return metadata
+
     async def create_application(self, payload: ApplicationCreate) -> ApplicationResponse:
+        metadata = self._build_metadata(payload.metadata, payload.source_url)
         application = ApplicationModel(
             application_id=f"app_{uuid.uuid4().hex[:8]}",
             company_name=payload.company_name,
@@ -32,7 +47,7 @@ class ApplicationService:
             location=payload.location,
             notes=payload.notes,
             next_action=payload.next_action,
-            application_metadata=payload.metadata,
+            application_metadata=metadata,
         )
         self.db.add(application)
         await self.db.commit()
@@ -86,7 +101,12 @@ class ApplicationService:
         if payload.next_action is not None:
             application.next_action = payload.next_action
         if payload.metadata is not None:
-            application.application_metadata = payload.metadata
+            application.application_metadata = self._build_metadata(payload.metadata, application.source_url)
+        elif payload.source_url is not None:
+            application.application_metadata = self._build_metadata(
+                application.application_metadata,
+                application.source_url,
+            )
 
         await self.db.commit()
         await self.db.refresh(application)

@@ -108,13 +108,9 @@ def _register_default_tools(registry: ToolRegistry) -> None:
     from app.tools.calculator import CalculatorTool
     from app.tools.files import ReadFileTool
     from app.tools.notes import WriteNoteTool
-    from app.tools.search_web import OpenUrlTool, ReadPageTool, SearchWebTool
     from app.tools.todos import AddTodoTool
 
     # 信息获取类
-    registry.register(SearchWebTool())
-    registry.register(OpenUrlTool())
-    registry.register(ReadPageTool())
     registry.register(ReadFileTool())
 
     # 结构化写入类

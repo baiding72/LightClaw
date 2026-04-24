@@ -17,6 +17,7 @@ from app.runtime.observer import Observer
 from app.runtime.planner import Planner
 from app.runtime.retry import RecoveryManager
 from app.runtime.state import AgentState
+from app.scenarios import detect_job_site_profile, detect_login_state
 from app.schemas.task import TaskDefinition
 from app.schemas.trajectory import Trajectory, TrajectoryStep
 from app.tools import get_tool_registry
@@ -97,6 +98,12 @@ class Agent:
             selected_tab = self.state.browser_context["selected_tab"]
             self.state.current_url = selected_tab.get("url")
             self.state.current_page_title = selected_tab.get("title")
+        elif self.state.is_current_page_task():
+            self.state.add_warning(
+                "missing_browser_context",
+                "当前任务要求读取当前页面，但本次运行没有收到浏览器上下文，系统可能降级为自主搜索网页。",
+                step=0,
+            )
 
         logger.info(f"Starting agent run: {self.task_id}, instruction: {instruction[:100]}")
 
@@ -187,6 +194,12 @@ class Agent:
                 tool_name = decision["tool_name"]
                 tool_args = decision["tool_args"]
 
+                policy_block_reason = self._guard_tool_usage(tool_name, tool_args)
+                if policy_block_reason:
+                    self.state.add_error("policy_guard", policy_block_reason)
+                    self.state.add_observation(f"策略护栏拦截 {tool_name}：{policy_block_reason}")
+                    continue
+
                 checkpoint = self._maybe_create_checkpoint(tool_name, tool_args)
                 if checkpoint:
                     self.state.add_checkpoint(**checkpoint)
@@ -218,6 +231,18 @@ class Agent:
                 self.state.set_lifecycle("observing")
                 observation = await self.observer.observe(tool_name, result, self.state)
                 self.state.advance_subgoal()
+
+                runtime_checkpoint = self._maybe_create_runtime_checkpoint(tool_name, result)
+                if runtime_checkpoint:
+                    self.state.add_checkpoint(**runtime_checkpoint)
+                    self.state.mark_waiting(runtime_checkpoint["title"])
+                    await self.gateway.log_step_end(
+                        step_id=step_id,
+                        result=result,
+                        observation=observation,
+                        error_type=result.error_type,
+                    )
+                    break
 
                 # 记录步骤结束
                 await self.gateway.log_step_end(
@@ -307,17 +332,6 @@ class Agent:
         if not self.state or self.state.scenario_type != "job_application":
             return None
 
-        if tool_name == "open_url":
-            url = str(tool_args.get("url", "")).lower()
-            if any(token in url for token in ["login", "signin", "auth"]):
-                return {
-                    "checkpoint_type": "login_required",
-                    "title": "Login Confirmation Required",
-                    "description": f"Agent is about to open a login page: {tool_args.get('url')}",
-                    "resume_hint": "Complete login in the browser, then run the task again to resume.",
-                    "metadata": {"tool_name": tool_name, "tool_args": tool_args},
-                }
-
         if tool_name == "click":
             selector = str(tool_args.get("selector", "")).lower()
             if any(token in selector for token in ["submit", "apply", "send", "confirm"]):
@@ -328,6 +342,76 @@ class Agent:
                     "resume_hint": "Review the form, confirm submission manually if needed, then run the task again to continue.",
                     "metadata": {"tool_name": tool_name, "tool_args": tool_args},
                 }
+
+        return None
+
+    def _guard_tool_usage(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+    ) -> Optional[str]:
+        if not self.state:
+            return None
+
+        if (
+            tool_name in {"write_note", "create_apple_note", "add_todo", "create_apple_reminder"}
+            and self.state.requires_application_evidence()
+            and not self.state.has_application_evidence()
+        ):
+            return "当前还没有从页面中提取到可验证的岗位/状态/时间证据，禁止直接写入总结或待办。"
+
+        if tool_name == "read_file":
+            path = str(tool_args.get("path", ""))
+            if self.state.is_current_page_task() and path.startswith("data/notes/"):
+                return "当前任务基于网页上下文，不应假定存在本地 markdown 笔记文件并继续读取。"
+
+        return None
+
+    def _maybe_create_runtime_checkpoint(
+        self,
+        tool_name: str,
+        result: Any,
+    ) -> Optional[dict[str, Any]]:
+        if (
+            not self.state
+            or tool_name != "take_screenshot"
+            or not result.success
+            or not isinstance(result.result, dict)
+        ):
+            return None
+
+        current_url = self.state.current_url
+        current_title = self.state.current_page_title
+        profile = detect_job_site_profile(current_url)
+        if not profile:
+            return None
+
+        self.state.current_site_profile = {
+            "site_key": profile.site_key,
+            "display_name": profile.display_name,
+        }
+
+        is_login_page = detect_login_state(
+            profile,
+            url=current_url,
+            title=current_title,
+            content="",
+        )
+        if is_login_page:
+            return {
+                "checkpoint_type": "login_required",
+                "title": f"{profile.display_name} 登录确认",
+                "description": (
+                    f"Agent 已打开 {profile.display_name} 的登录页或未登录页面，请先在受控浏览器窗口中完成登录。"
+                ),
+                "resume_hint": "完成登录后回到任务页，点击“继续任务”。",
+                "metadata": {
+                    "site_key": profile.site_key,
+                    "site_name": profile.display_name,
+                    "url": current_url,
+                    "detected_state": "login_required",
+                },
+            }
 
         return None
 
@@ -347,6 +431,7 @@ class Agent:
             "retry_count": self.state.retry_count,
             "successful_recoveries": self.state.successful_recoveries,
             "errors": self.state.errors,
+            "warnings": self.state.warnings,
             "error": self.state.errors[-1]["message"] if self.state.errors else None,
             "current_goal": self.state.current_goal,
             "current_subgoal": self.state.current_subgoal,

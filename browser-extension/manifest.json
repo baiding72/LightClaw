@@ -3,10 +3,11 @@
   "name": "LightClaw Browser Bridge",
   "version": "0.1.0",
   "description": "Expose the current browser window tabs to the LightClaw Task Runner.",
-  "permissions": ["tabs"],
+  "permissions": ["tabs", "scripting", "activeTab"],
   "host_permissions": [
     "http://localhost/*",
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"

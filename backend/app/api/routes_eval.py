@@ -3,7 +3,11 @@
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+import json
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
@@ -14,6 +18,7 @@ from app.schemas.eval import (
     EvaluationResponse,
 )
 from app.services.eval_service import EvalService
+from app.core.config import get_settings
 
 router = APIRouter(prefix="/eval", tags=["evaluation"])
 
@@ -37,6 +42,19 @@ async def list_evaluations(
     """获取评测列表"""
     service = EvalService(db)
     return await service.list_evaluations(page, page_size)
+
+
+@router.get("/report/latest")
+async def get_latest_eval_report() -> dict[str, Any]:
+    """读取 deterministic/live 脚本生成的 latest.json 报告。"""
+    settings = get_settings()
+    report_path = Path(settings.data_dir) / "eval_reports" / "latest.json"
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Latest evaluation report not found")
+    try:
+        return json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to read latest report: {exc}") from exc
 
 
 @router.get("/{eval_id}", response_model=EvaluationResponse)
