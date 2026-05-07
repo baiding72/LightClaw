@@ -90,6 +90,38 @@ async def list_tools() -> dict:
     return {
         "tools": registry.get_tool_infos(),
         "total": len(registry.get_all()),
+        "skills": registry.list_skills(),
+        "loaded_tool_count": registry.get_loaded_tool_count(),
+    }
+
+
+@router.get("/tools/skills")
+async def list_tool_skills() -> dict:
+    """列出工具 skill 元数据；不强制加载工具实例。"""
+    registry = get_tool_registry()
+    skills = registry.list_skills()
+    return {
+        "skills": skills,
+        "total": len(skills),
+        "loaded_tool_count": registry.get_loaded_tool_count(),
+    }
+
+
+@router.post("/tools/skills/{skill_id}/load")
+async def load_tool_skill(skill_id: str) -> dict:
+    """按需加载某个工具 skill。"""
+    registry = get_tool_registry()
+    skill = registry.get_skill(skill_id)
+    if not skill:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Tool skill not found")
+    tools = registry.load_skill(skill_id)
+    return {
+        "skill_id": skill_id,
+        "loaded": True,
+        "tools": [tool.name for tool in tools] or skill.tool_names,
+        "loaded_tool_count": registry.get_loaded_tool_count(),
     }
 
 

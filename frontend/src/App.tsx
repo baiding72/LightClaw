@@ -5,6 +5,7 @@ import MemoryPage from './pages/MemoryPage'
 import DataPoolPage from './pages/DataPoolPage'
 import EvaluationPage from './pages/EvaluationPage'
 import ApplicationsPage from './pages/ApplicationsPage'
+import ShowcasePage from './pages/ShowcasePage'
 
 function App() {
   const navItems = [
@@ -14,6 +15,7 @@ function App() {
     { to: '/memory', label: '记忆', icon: '🧠' },
     { to: '/datapool', label: '数据池', icon: '📦' },
     { to: '/eval', label: '评测', icon: '📈' },
+    { to: '/showcase', label: '演示', icon: '🎬' },
   ]
 
   return (
@@ -66,6 +68,7 @@ function App() {
           <Route path="/memory" element={<MemoryPage />} />
           <Route path="/datapool" element={<DataPoolPage />} />
           <Route path="/eval" element={<EvaluationPage />} />
+          <Route path="/showcase" element={<ShowcasePage />} />
         </Routes>
       </main>
     </div>

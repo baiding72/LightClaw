@@ -1,0 +1,179 @@
+{
+  "generated_at": "2026-05-05T01:50:01.120811",
+  "status": "passed",
+  "training_status": "data_preparation_only_no_model_training",
+  "output_root": "data/training_pipeline/latest",
+  "stages": [
+    {
+      "name": "trajectory_collection",
+      "status": "passed",
+      "purpose": "Collect safe dry-run recruiting traces without login/upload/submit.",
+      "output": {
+        "trace_id": "recruiting_fixture_f4983b0c",
+        "jobs_extracted_count": 2,
+        "apply_flow_steps_count": 8,
+        "blocked_by_login": true,
+        "blocked_by_captcha": true,
+        "safe_stop_count": 2,
+        "stop_reason_distribution": {
+          "login_required": 1,
+          "captcha_blocked": 1,
+          "safe_stop": 2
+        },
+        "safe_stop_rate": 1.0,
+        "extraction_schema_pass_rate": 1.0,
+        "output_dir": "data/trajectories/recruiting/latest"
+      }
+    },
+    {
+      "name": "trajectory_distillation",
+      "status": "passed",
+      "purpose": "Compact raw traces into training-oriented trajectory records.",
+      "output": {
+        "output_dir": "data/training_pipeline/latest/distilled",
+        "files": {
+          "distilled_trajectories": {
+            "path": "data/training_pipeline/latest/distilled/distilled_trajectories.jsonl",
+            "count": 19
+          },
+          "distillation_card": {
+            "path": "data/training_pipeline/latest/distilled/distillation_card.json",
+            "export_time": "2026-05-05T01:50:01.099880",
+            "source_trajectory_dir": "data/trajectories",
+            "distilled_count": 19,
+            "avg_steps": 8.105263157894736,
+            "avg_quality_score": 0.7773066268911144,
+            "sample_type_distribution": {
+              "recruiting_safe_stop": 1,
+              "trajectory_distilled": 18
+            },
+            "safe_stop_count": 1,
+            "include_failed": true
+          }
+        }
+      }
+    },
+    {
+      "name": "sft_dpo_grpo_export",
+      "status": "passed",
+      "purpose": "Export SFT/DPO/GRPO/self-correction JSONL with data card.",
+      "output": {
+        "output_dir": "data/training_pipeline/latest/exports",
+        "files": {
+          "sft": {
+            "path": "data/training_pipeline/latest/exports/sft.jsonl",
+            "count": 27
+          },
+          "dpo": {
+            "path": "data/training_pipeline/latest/exports/dpo.jsonl",
+            "count": 19
+          },
+          "grpo": {
+            "path": "data/training_pipeline/latest/exports/grpo.jsonl",
+            "count": 15
+          },
+          "self_correction": {
+            "path": "data/training_pipeline/latest/exports/self_correction.jsonl",
+            "count": 22
+          }
+        },
+        "data_card": {
+          "path": "data/training_pipeline/latest/exports/data_card.json",
+          "export_time": "2026-05-05T01:50:01.112679",
+          "source": "trajectory+deterministic_fixture",
+          "sft_count": 27,
+          "dpo_pair_count": 19,
+          "grpo_group_count": 15,
+          "self_correction_count": 22,
+          "error_type_distribution": {
+            "wrong_args": 5,
+            "tool_runtime_error": 2,
+            "gui_wrong_element": 10,
+            "wrong_tool": 1,
+            "invalid_format": 1,
+            "policy_violation": 1,
+            "gui_click_miss": 1,
+            "over_correction": 1
+          },
+          "action_type_distribution": {
+            "tool_call": 166,
+            "gui_grounding": 5,
+            "self_correction": 12,
+            "ask_user": 2,
+            "gui_click": 2
+          },
+          "sample_type_distribution": {
+            "recruiting_safe_stop": 1,
+            "sft": 26
+          },
+          "avg_steps": 1.5,
+          "chosen_reward_avg": 0.8635446115288221,
+          "rejected_reward_avg": 0.6615764411027569,
+          "invalid_sample_count": 0,
+          "schema_validation_pass_rate": 1.0,
+          "suspicious_pair_count": 0,
+          "low_signal_group_count": 0
+        }
+      }
+    },
+    {
+      "name": "spa_rl_preparation",
+      "status": "passed",
+      "purpose": "Prepare SPA-style progress attribution and PPO-ready dense reward rollouts.",
+      "output": {
+        "input_dir": "data/training_pipeline/latest/exports",
+        "output_dir": "data/training_pipeline/latest/spa",
+        "files": {
+          "spa_rollouts": {
+            "path": "data/training_pipeline/latest/spa/spa_rollouts.jsonl",
+            "count": 71
+          },
+          "progress_attribution": {
+            "path": "data/training_pipeline/latest/spa/progress_attribution.jsonl",
+            "count": 209
+          },
+          "ppo_ready": {
+            "path": "data/training_pipeline/latest/spa/ppo_ready.jsonl",
+            "count": 71
+          },
+          "spa_data_card": {
+            "path": "data/training_pipeline/latest/spa/spa_data_card.json",
+            "export_time": "2026-05-05T01:50:01.115633",
+            "rollout_count": 71,
+            "step_count": 209,
+            "avg_steps_per_rollout": 2.943661971830986,
+            "avg_final_reward": 0.8326760563380281,
+            "avg_dense_reward": 0.3627751196172249,
+            "avg_action_validity": 0.7990430622009569,
+            "safe_stop_step_count": 4,
+            "error_step_count": 44,
+            "reward_design": "dense_reward = stepwise_progress + 0.1 * action_validity",
+            "training_status": "data_preparation_only_no_model_training"
+          }
+        }
+      }
+    },
+    {
+      "name": "evaluation",
+      "status": "passed",
+      "purpose": "Run deterministic eval over tool-use, self-correction and GUI grounding fixtures.",
+      "output": {
+        "report_path": "data/training_pipeline/latest/eval/latest.json",
+        "task_success_rate": 0.875,
+        "recovery_rate": 0.8,
+        "gui_grounding_accuracy": 1.0
+      }
+    }
+  ],
+  "recommended_real_training_order": [
+    "SFT on successful distilled trajectories and tool-use messages",
+    "DPO on chosen/rejected correction pairs",
+    "SPA-style RL using ppo_ready.jsonl dense_rewards in PPO/GRPO trainer",
+    "Evaluate on deterministic fixtures first, then separately on live/browser tasks"
+  ],
+  "explicit_non_claims": [
+    "No model weights are trained by this pipeline.",
+    "No real online success-rate improvement is claimed.",
+    "No GPU or external LLM API key is required."
+  ]
+}

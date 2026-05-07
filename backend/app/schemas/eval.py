@@ -2,7 +2,7 @@
 评测相关 Schema
 """
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -33,16 +33,16 @@ class TaskEvaluationDetail(BaseModel):
     recovery_attempts: int
     successful_recoveries: int
     latency_ms: int
-    token_usage: Optional[dict[str, int]] = None
+    token_usage: dict[str, int] | None = None
 
 
 class EvaluationRequest(BaseModel):
     """评测请求"""
     eval_name: str
     mode: str = "deterministic"
-    task_ids: Optional[list[str]] = None  # None 表示运行所有任务
-    categories: Optional[list[str]] = None
-    difficulties: Optional[list[str]] = None
+    task_ids: list[str] | None = None  # None 表示运行所有任务
+    categories: list[str] | None = None
+    difficulties: list[str] | None = None
 
 
 class EvaluationResponse(BaseModel):
@@ -54,6 +54,8 @@ class EvaluationResponse(BaseModel):
     details: list[TaskEvaluationDetail]
     self_correction_metrics: dict[str, Any] = Field(default_factory=dict)
     failure_analysis: dict[str, Any] = Field(default_factory=dict)
+    recruiting_metrics: dict[str, Any] = Field(default_factory=dict)
+    skill_metrics: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
     class Config:

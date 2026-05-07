@@ -60,6 +60,7 @@ class AgentState:
     lifecycle_status: str = "planning"
 
     candidate_tools: list[dict[str, Any]] = field(default_factory=list)
+    selected_skills: list[dict[str, Any]] = field(default_factory=list)
     current_decision: Optional[dict[str, Any]] = None
     decision_trace: list[dict[str, Any]] = field(default_factory=list)
     recovery_trace: list[dict[str, Any]] = field(default_factory=list)
@@ -101,6 +102,7 @@ class AgentState:
             "expected_result": self.expected_result,
             "last_observation": self.observations[-1] if self.observations else None,
             "last_tool": self.tool_calls[-1]["tool"] if self.tool_calls else None,
+            "selected_skills": self.selected_skills,
             "active_checkpoint": {
                 "type": self.active_checkpoint.get("type"),
                 "title": self.active_checkpoint.get("title"),
@@ -126,6 +128,11 @@ class AgentState:
             "scenario_type": self.scenario_type,
             "scenario_context": self.scenario_context,
         }
+
+    def set_selected_skills(self, selected_skills: list[dict[str, Any]]) -> None:
+        self.selected_skills = selected_skills
+        self.refresh_memory_summary()
+        self.updated_at = datetime.now()
 
     def get_state_summary(self) -> str:
         parts = [
@@ -476,6 +483,7 @@ class AgentState:
             "expected_result": self.expected_result,
             "lifecycle_status": self.lifecycle_status,
             "candidate_tools": self.candidate_tools,
+            "selected_skills": self.selected_skills,
             "current_decision": self.current_decision,
             "decision_trace": self.decision_trace,
             "recovery_trace": self.recovery_trace,
@@ -524,6 +532,7 @@ class AgentState:
             expected_result=payload.get("expected_result"),
             lifecycle_status=payload.get("lifecycle_status", "planning"),
             candidate_tools=payload.get("candidate_tools", []),
+            selected_skills=payload.get("selected_skills", []),
             current_decision=payload.get("current_decision"),
             decision_trace=payload.get("decision_trace", []),
             recovery_trace=payload.get("recovery_trace", []),

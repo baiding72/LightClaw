@@ -95,6 +95,7 @@ class TaskEvent:
     category: Optional[str] = None
     difficulty: Optional[str] = None
     allowed_tools: list[str] = field(default_factory=list)
+    selected_skills: list[dict[str, Any]] = field(default_factory=list)
     target_state: Optional[dict[str, Any]] = None
     browser_context: Optional[dict[str, Any]] = None
 
@@ -121,6 +122,7 @@ class TaskEvent:
             "category": self.category,
             "difficulty": self.difficulty,
             "allowed_tools": self.allowed_tools,
+            "selected_skills": self.selected_skills,
             "target_state": self.target_state,
             "browser_context": self.browser_context,
             "final_outcome": self.final_outcome,

@@ -14,6 +14,18 @@ user task
   -> eval dashboard
 ```
 
+主展示链路现在以 **Recruiting Safe Dry-run** 为中心：
+
+```text
+recruiting HTML fixture
+  -> extract jobs / apply steps
+  -> guard login/captcha/upload/submit
+  -> safe trajectory
+  -> replay
+  -> eval recruiting metrics
+  -> SFT / DPO / GRPO export + data card
+```
+
 ## Implemented
 
 - **Unified Action Schema**：Pydantic 表达 `tool_call`、`ask_user`、`final_answer`、`self_correction`、`gui_click/gui_grounding`。
@@ -23,11 +35,17 @@ user task
 - **Failure Analysis**：eval report 按 error_type 聚合失败，并保留可 replay sample case。
 - **Training Export**：导出 SFT / DPO / GRPO / self-correction JSONL，并生成 data card。
 - **GUI Grounding Baseline**：rule-based selector/bbox/click point baseline，含 point-in-box、bbox IoU、GUI action accuracy。
+- **Recruiting Safe Dry-run**：离线招聘 HTML fixture 抽取岗位/申请步骤，遇到登录、验证码、上传、提交动作时安全停止并记录 stop reason。
 - **Frontend Evaluation View**：React Evaluation 页面可展示 latest deterministic report 和 self-correction metrics。
 
 ## Deterministic Demo
 
 deterministic demo 使用固定 fixtures，不依赖真实 LLM API key。它用于证明 schema、eval、export、replay 和 data-quality 检查链路可运行，不代表真实线上指标。
+
+P0/P1 currently verified:
+
+- P0 Recruiting safe dry-run records a safe flow instead of applying for jobs.
+- P1 Tool skills are registered as coarse capabilities and concrete tools are loaded progressively.
 
 Sample output:
 
@@ -42,6 +60,52 @@ Recovery success rate: 83.33%
 Over-correction rate: 16.67%
 ```
 
+Recruiting safe dry-run sample:
+
+```json
+{
+  "jobs_extracted_count": 2,
+  "apply_flow_steps_count": 8,
+  "blocked_by_login": true,
+  "blocked_by_captcha": true,
+  "safe_stop_count": 2,
+  "stop_reason_distribution": {
+    "login_required": 1,
+    "captcha_blocked": 1,
+    "safe_stop": 2
+  },
+  "safe_stop_rate": 1.0
+}
+```
+
+Skill progressive loading sample:
+
+```json
+{
+  "registered_skill_count": 5,
+  "initial_loaded_tool_count": 0,
+  "selected_skills": [
+    "browser_gui_control",
+    "information_retrieval",
+    "structured_memory_write"
+  ],
+  "loaded_tool_count_after_selection": 12
+}
+```
+
+Training export marks recruiting safety samples explicitly:
+
+```json
+{
+  "sample_type": "recruiting_safe_stop",
+  "safety_domain": "recruiting",
+  "stop_reason_distribution": {
+    "login_required": 1,
+    "safe_stop": 1
+  }
+}
+```
+
 Examples:
 
 - [eval_report_example.json](examples/eval_report_example.json)
@@ -54,19 +118,29 @@ Examples:
 cd backend
 uv sync
 
-# 1. Run deterministic eval
+# 1. Collect safe recruiting trajectory from fixture
+uv run python ../scripts/collect_recruiting_trajectories.py --mode fixture
+
+# 2. Replay the recruiting safe-stop flow
+uv run python ../scripts/replay_trace.py --trace-domain recruiting
+
+# 3. Run deterministic eval, including recruiting metrics if the trace exists
 uv run python ../scripts/run_eval.py --mode deterministic
 
-# 2. Export SFT/DPO/GRPO/self-correction data with data card
+# 4. Export SFT/DPO/GRPO/self-correction data with data card
 uv run python ../scripts/export_training_data.py --fixtures --with-data-card --output-dir data/training_exports/latest
 
-# 3. Replay one failure/correction case
+# 5. Replay one failure/correction case
 uv run python ../scripts/replay_trace.py --fixture-case wrong_args
 
-# 4. Dry-run exported training data
+# 6. Dry-run exported training data
 uv run python ../scripts/train_stub.py --input-dir data/training_exports/latest --dry-run
 
-# 5. Run tests
+# 7. Prepare SPA-style dense reward data, no model training
+uv run python ../scripts/prepare_spa_training_data.py --input-dir data/training_exports/latest --output-dir data/training_exports/latest_spa
+uv run python ../scripts/train_stub.py --input-dir data/training_exports/latest --spa-dir data/training_exports/latest_spa --dry-run
+
+# 8. Run tests
 uv run --with pytest --with pytest-asyncio pytest
 ```
 
@@ -76,6 +150,31 @@ One-command reproducibility:
 cd backend
 uv run python ../scripts/run_all_checks.py
 ```
+
+One-command interview showcase:
+
+```bash
+cd backend
+uv run python ../scripts/run_showcase.py
+```
+
+Output:
+
+```text
+backend/data/showcase/latest/showcase.json
+backend/data/showcase/latest/showcase.md
+```
+
+The frontend `演示` page reads `/api/eval/showcase/latest` and renders the same P0/P1/P2 chain in one place.
+
+Training-preparation pipeline:
+
+```bash
+cd backend
+uv run python ../scripts/run_training_pipeline.py
+```
+
+This runs trajectory collection, trajectory distillation, SFT/DPO/GRPO export, SPA-style dense reward preparation, and deterministic evaluation. It does not train model weights.
 
 Frontend:
 
@@ -122,4 +221,6 @@ examples/                   small checked-in output examples
 - [Failure Taxonomy](docs/failure_taxonomy.md)
 - [Interview Guide](docs/interview_guide.md)
 - [Training Stub](docs/training_stub.md)
+- [SPA-style Training Preparation](docs/spa_training_preparation.md)
+- [AutoDL GPU Training Runbook](docs/autodl_training_runbook.md)
 - [Resume Notes](docs/resume_notes.md)

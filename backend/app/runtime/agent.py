@@ -16,6 +16,7 @@ from app.runtime.executor import Executor
 from app.runtime.observer import Observer
 from app.runtime.planner import Planner
 from app.runtime.retry import RecoveryManager
+from app.runtime.skill_selector import SkillSelector
 from app.runtime.state import AgentState
 from app.scenarios import detect_job_site_profile, detect_login_state
 from app.schemas.task import TaskDefinition
@@ -46,6 +47,7 @@ class Agent:
         self.recovery = RecoveryManager()
         self.memory = MemoryManager()
         self.gateway = GatewayCollector()
+        self.skill_selector = SkillSelector(get_tool_registry())
 
         # 状态
         self.state: Optional[AgentState] = None
@@ -107,10 +109,28 @@ class Agent:
 
         logger.info(f"Starting agent run: {self.task_id}, instruction: {instruction[:100]}")
 
-        # 获取可用工具
+        # 获取可用工具。若未显式传入 allowed_tools，则先选择 skill，再展开工具。
         tool_registry = get_tool_registry()
+        skill_selection = self.skill_selector.select(
+            instruction,
+            browser_context=browser_context,
+            scenario_type=scenario_type,
+            allowed_tools=allowed_tools,
+        )
+        selected_skills = [
+            {
+                "skill_id": skill_id,
+                "reason": skill_selection.reasons.get(skill_id, ""),
+            }
+            for skill_id in skill_selection.selected_skills
+        ]
+        if self.state:
+            self.state.set_selected_skills(selected_skills)
+        if allowed_tools is None:
+            allowed_tools = skill_selection.allowed_tools
+
         if allowed_tools:
-            tools = [t for t in tool_registry.get_schemas() if t["name"] in allowed_tools]
+            tools = tool_registry.get_schemas(allowed_tools)
         else:
             tools = tool_registry.get_schemas()
             allowed_tools = [t["name"] for t in tools]
@@ -121,6 +141,7 @@ class Agent:
             instruction=instruction,
             allowed_tools=allowed_tools,
             browser_context=browser_context,
+            selected_skills=selected_skills,
         )
 
         try:

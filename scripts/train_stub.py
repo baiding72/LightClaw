@@ -19,6 +19,11 @@ REQUIRED_FILES = {
     "grpo": "grpo.jsonl",
     "self_correction": "self_correction.jsonl",
 }
+OPTIONAL_SPA_FILES = {
+    "spa_rollouts": "spa_rollouts.jsonl",
+    "progress_attribution": "progress_attribution.jsonl",
+    "ppo_ready": "ppo_ready.jsonl",
+}
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -69,12 +74,33 @@ def validate_self_correction(rows: list[dict[str, Any]]) -> None:
             raise ValueError(f"Self-correction row {index} missing {sorted(missing)}.")
 
 
+def validate_spa_rollouts(rows: list[dict[str, Any]]) -> None:
+    for index, row in enumerate(rows, start=1):
+        steps = row.get("steps")
+        if not isinstance(steps, list) or not steps:
+            raise ValueError(f"SPA rollout {index} must contain non-empty steps.")
+        progress_sum = sum(float(step.get("progress_score", 0.0)) for step in steps)
+        final_reward = float(row.get("final_reward", 0.0))
+        if abs(progress_sum - final_reward) > 1e-6:
+            raise ValueError(f"SPA rollout {index} progress scores must sum to final_reward.")
+
+
+def validate_ppo_ready(rows: list[dict[str, Any]]) -> None:
+    for index, row in enumerate(rows, start=1):
+        trajectory = row.get("trajectory")
+        dense_rewards = row.get("dense_rewards")
+        if not isinstance(trajectory, list) or not isinstance(dense_rewards, list):
+            raise ValueError(f"PPO row {index} must contain trajectory and dense_rewards lists.")
+        if len(trajectory) != len(dense_rewards):
+            raise ValueError(f"PPO row {index} trajectory length must match dense_rewards length.")
+
+
 def preview_row(row: dict[str, Any]) -> dict[str, Any]:
     text = json.dumps(row, ensure_ascii=False)
     return {"preview": text[:500] + ("..." if len(text) > 500 else "")}
 
 
-def dry_run(input_dir: Path) -> dict[str, Any]:
+def dry_run(input_dir: Path, spa_dir: Path | None = None) -> dict[str, Any]:
     datasets = {
         name: read_jsonl(input_dir / filename)
         for name, filename in REQUIRED_FILES.items()
@@ -86,11 +112,22 @@ def dry_run(input_dir: Path) -> dict[str, Any]:
 
     data_card_path = input_dir / "data_card.json"
     data_card = json.loads(data_card_path.read_text(encoding="utf-8")) if data_card_path.exists() else None
+    spa_input_dir = spa_dir or input_dir
+    spa_datasets: dict[str, list[dict[str, Any]]] = {}
+    if (spa_input_dir / "spa_rollouts.jsonl").exists():
+        spa_datasets = {
+            name: read_jsonl(spa_input_dir / filename)
+            for name, filename in OPTIONAL_SPA_FILES.items()
+        }
+        validate_spa_rollouts(spa_datasets["spa_rollouts"])
+        validate_ppo_ready(spa_datasets["ppo_ready"])
     return {
         "input_dir": str(input_dir),
+        "spa_dir": str(spa_input_dir) if spa_datasets else None,
         "ready": True,
-        "message": "ready for SFT/DPO/GRPO training",
+        "message": "ready for SFT/DPO/GRPO training" + (" and SPA-style dense-reward preparation" if spa_datasets else ""),
         "counts": {name: len(rows) for name, rows in datasets.items()},
+        "spa_counts": {name: len(rows) for name, rows in spa_datasets.items()},
         "previews": {
             name: preview_row(rows[0]) if rows else {"preview": "<empty>"}
             for name, rows in datasets.items()
@@ -100,6 +137,7 @@ def dry_run(input_dir: Path) -> dict[str, Any]:
             "SFT: map sft.jsonl messages into a supervised fine-tuning trainer.",
             "DPO: feed dpo.jsonl system/prompt/chosen/rejected into a preference trainer.",
             "GRPO/verl: use grpo.jsonl candidate_trajectories and reward_breakdown as rollout fixtures.",
+            "SPA-style RL: run prepare_spa_training_data.py, then feed ppo_ready.jsonl dense_rewards into a PPO/GRPO trainer.",
         ],
     }
 
@@ -107,11 +145,12 @@ def dry_run(input_dir: Path) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate exported datasets without training.")
     parser.add_argument("--input-dir", required=True)
+    parser.add_argument("--spa-dir", default=None, help="Optional directory containing SPA-style dense reward files.")
     parser.add_argument("--dry-run", action="store_true", help="Validate and preview only. No training is launched.")
     args = parser.parse_args()
     if not args.dry_run:
         raise SystemExit("This repository only supports --dry-run. Real training is intentionally not launched.")
-    result = dry_run(Path(args.input_dir))
+    result = dry_run(Path(args.input_dir), Path(args.spa_dir) if args.spa_dir else None)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,7 +13,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
 DEFAULT_EXPORT_DIR = BACKEND / "data" / "training_exports" / "latest"
+DEFAULT_SPA_EXPORT_DIR = BACKEND / "data" / "training_exports" / "latest_spa"
 DEFAULT_REPLAY_PATH = BACKEND / "data" / "eval_reports" / "replay_wrong_args.md"
+DEFAULT_RECRUITING_REPLAY_PATH = BACKEND / "data" / "eval_reports" / "replay_recruiting.md"
+
+
+def find_uv() -> str:
+    uv = shutil.which("uv")
+    if uv:
+        return uv
+    fallback = Path.home() / ".local" / "bin" / "uv"
+    if fallback.exists():
+        return str(fallback)
+    return "uv"
 
 
 @dataclass
@@ -48,13 +61,22 @@ def run_command(command: list[str], *, cwd: Path) -> CheckResult:
 
 
 def run_all_checks(*, with_pytest: bool = False) -> dict:
+    uv_bin = find_uv()
     DEFAULT_EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     DEFAULT_REPLAY_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     checks: list[CheckResult] = []
-    checks.append(run_command(["uv", "run", "python", "../scripts/run_eval.py", "--mode", "deterministic"], cwd=BACKEND))
     checks.append(run_command([
-        "uv",
+        uv_bin,
+        "run",
+        "python",
+        "../scripts/collect_recruiting_trajectories.py",
+        "--mode",
+        "fixture",
+    ], cwd=BACKEND))
+    checks.append(run_command([uv_bin, "run", "python", "../scripts/run_eval.py", "--mode", "deterministic"], cwd=BACKEND))
+    checks.append(run_command([
+        uv_bin,
         "run",
         "python",
         "../scripts/export_training_data.py",
@@ -63,9 +85,30 @@ def run_all_checks(*, with_pytest: bool = False) -> dict:
         "--output-dir",
         str(DEFAULT_EXPORT_DIR),
     ], cwd=BACKEND))
+    checks.append(run_command([
+        uv_bin,
+        "run",
+        "python",
+        "../scripts/prepare_spa_training_data.py",
+        "--input-dir",
+        str(DEFAULT_EXPORT_DIR),
+        "--output-dir",
+        str(DEFAULT_SPA_EXPORT_DIR),
+    ], cwd=BACKEND))
+    checks.append(run_command([
+        uv_bin,
+        "run",
+        "python",
+        "../scripts/train_stub.py",
+        "--input-dir",
+        str(DEFAULT_EXPORT_DIR),
+        "--spa-dir",
+        str(DEFAULT_SPA_EXPORT_DIR),
+        "--dry-run",
+    ], cwd=BACKEND))
 
     replay = run_command([
-        "uv",
+        uv_bin,
         "run",
         "python",
         "../scripts/replay_trace.py",
@@ -76,9 +119,21 @@ def run_all_checks(*, with_pytest: bool = False) -> dict:
         DEFAULT_REPLAY_PATH.write_text(replay.stdout, encoding="utf-8")
     checks.append(replay)
 
+    recruiting_replay = run_command([
+        uv_bin,
+        "run",
+        "python",
+        "../scripts/replay_trace.py",
+        "--trace-domain",
+        "recruiting",
+    ], cwd=BACKEND)
+    if recruiting_replay.passed:
+        DEFAULT_RECRUITING_REPLAY_PATH.write_text(recruiting_replay.stdout, encoding="utf-8")
+    checks.append(recruiting_replay)
+
     if with_pytest:
         checks.append(run_command([
-            "uv",
+            uv_bin,
             "run",
             "--with",
             "pytest",
@@ -94,8 +149,12 @@ def run_all_checks(*, with_pytest: bool = False) -> dict:
         "passed": all(check.passed for check in checks),
         "eval_report_path": str(BACKEND / "data" / "eval_reports" / "latest.json"),
         "training_export_path": str(DEFAULT_EXPORT_DIR),
+        "spa_training_export_path": str(DEFAULT_SPA_EXPORT_DIR),
         "data_card_path": str(DEFAULT_EXPORT_DIR / "data_card.json"),
+        "spa_data_card_path": str(DEFAULT_SPA_EXPORT_DIR / "spa_data_card.json"),
         "replay_output_path": str(DEFAULT_REPLAY_PATH),
+        "recruiting_replay_output_path": str(DEFAULT_RECRUITING_REPLAY_PATH),
+        "recruiting_trace_path": str(BACKEND / "data" / "trajectories" / "recruiting" / "latest" / "traces.jsonl"),
         "checks": [
             {
                 "name": check.name,

@@ -53,12 +53,14 @@ build/
 # Data
 data/*.db
 data/trajectories/*.jsonl
+data/trajectories/**/*.jsonl
 data/screenshots/*.png
 data/datapool/*.jsonl
 data/exports/*.jsonl
 data/eval/*.json
 backend/data/*.db
 backend/data/trajectories/*.jsonl
+backend/data/trajectories/**/*.jsonl
 backend/data/screenshots/*.png
 backend/data/datapool/*.jsonl
 backend/data/exports/*.jsonl

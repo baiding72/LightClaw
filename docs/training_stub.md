@@ -39,5 +39,21 @@ uv run python ../scripts/train_stub.py --input-dir data/training_exports/latest 
 - SFT：将 `sft.jsonl` 的 `messages` 映射到 supervised fine-tuning trainer。
 - DPO：将 `dpo.jsonl` 的 `system/prompt/chosen/rejected` 接到 preference trainer。
 - GRPO / verl：将 `grpo.jsonl` 的 candidate trajectories 和 reward breakdown 作为 rollout/reward fixture。
+- SPA-style RL：先运行 `prepare_spa_training_data.py` 生成 `ppo_ready.jsonl`，再把 `dense_rewards` 接到 PPO/GRPO 训练器。
 
 本仓库不引入大型训练依赖，避免让核心 demo 依赖 GPU 或真实 API key。
+
+## SPA-style Dense Reward Dry-run
+
+```bash
+uv run python ../scripts/prepare_spa_training_data.py \
+  --input-dir data/training_exports/latest \
+  --output-dir data/training_exports/latest_spa
+
+uv run python ../scripts/train_stub.py \
+  --input-dir data/training_exports/latest \
+  --spa-dir data/training_exports/latest_spa \
+  --dry-run
+```
+
+详见 [SPA-style Training Preparation](spa_training_preparation.md)。

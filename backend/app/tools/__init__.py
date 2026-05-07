@@ -1,4 +1,3 @@
-from app.tools.base import BaseTool, ToolContext
 from app.tools.apple_native import (
     CreateAppleNoteTool,
     CreateAppleReminderTool,
@@ -7,7 +6,7 @@ from app.tools.apple_native import (
     OpenAppleNoteTool,
     ShowAppleReminderTool,
 )
-from app.tools.registry import ToolRegistry, get_tool_registry
+from app.tools.base import BaseTool, ToolContext
 from app.tools.browser import (
     ClickTool,
     ScrollTool,
@@ -15,10 +14,12 @@ from app.tools.browser import (
     TakeScreenshotTool,
     TypeTextTool,
 )
-from app.tools.calendar import AddCalendarEventTool, ListCalendarEventsTool
 from app.tools.calculator import CalculatorTool
+from app.tools.calendar import AddCalendarEventTool, ListCalendarEventsTool
 from app.tools.files import ReadFileTool
 from app.tools.notes import ReadNotesTool, WriteNoteTool
+from app.tools.registry import ToolRegistry, get_tool_registry
+from app.tools.skills import ToolSkill, ToolSpec, build_default_tool_skills
 from app.tools.todos import AddTodoTool, ListTodosTool
 
 __all__ = [
@@ -26,6 +27,9 @@ __all__ = [
     "ToolContext",
     "ToolRegistry",
     "get_tool_registry",
+    "ToolSkill",
+    "ToolSpec",
+    "build_default_tool_skills",
     "CreateAppleReminderTool",
     "ListAppleRemindersTool",
     "CreateAppleNoteTool",

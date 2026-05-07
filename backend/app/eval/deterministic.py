@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+from app.core.config import get_settings
 from app.core.enums import FailureType
 from app.eval.reward import ExpectedAction, RuleBasedVerifier
 from app.gui_grounding import (
@@ -15,8 +17,12 @@ from app.gui_grounding import (
     RuleBasedGroundingModule,
     gui_action_accuracy,
 )
+from app.recruiting.eval import calculate_recruiting_metrics
+from app.runtime.skill_selector import SkillSelector
 from app.schemas.action import AgentAction, AgentActionType
 from app.schemas.eval import EvaluationMetrics, EvaluationResponse, TaskEvaluationDetail
+from app.tools.registry import ToolRegistry
+from app.tools.skills import build_default_tool_skills
 from app.training.self_correction import (
     calculate_self_correction_metrics,
     construct_self_correction_samples,
@@ -375,8 +381,55 @@ def build_deterministic_evaluation(eval_name: str) -> EvaluationResponse:
         details=details,
         self_correction_metrics=self_correction_metrics,
         failure_analysis=build_failure_analysis(fixtures),
+        recruiting_metrics=_load_recruiting_metrics(),
+        skill_metrics=build_skill_metrics(fixtures),
         created_at=datetime.now(),
     )
+
+
+def build_skill_metrics(trajectories: list[dict[str, Any]]) -> dict[str, Any]:
+    """Evaluate progressive skill selection on deterministic task instructions."""
+    registry = ToolRegistry()
+    for skill in build_default_tool_skills():
+        registry.register_skill(skill)
+
+    selector = SkillSelector(registry)
+    selections: list[dict[str, Any]] = []
+    skill_distribution: dict[str, int] = {}
+    loaded_tool_counts: list[int] = []
+
+    for item in trajectories:
+        instruction = item.get("instruction", "")
+        is_recruiting = any(keyword in instruction.lower() for keyword in ["招聘", "投递", "岗位", "申请", "resume", "job"])
+        selection = selector.select(
+            instruction,
+            browser_context={"selected_tab": {"url": "https://fixture.local/careers"}} if is_recruiting else None,
+            scenario_type="recruiting" if is_recruiting else None,
+        )
+        before = registry.get_loaded_tool_count()
+        for skill_id in selection.selected_skills:
+            registry.load_skill(skill_id)
+            skill_distribution[skill_id] = skill_distribution.get(skill_id, 0) + 1
+        after = registry.get_loaded_tool_count()
+        loaded_tool_counts.append(after - before)
+        selections.append({
+            "task_id": item.get("task_id"),
+            "selected_skills": selection.selected_skills,
+            "allowed_tools_count": len(selection.allowed_tools),
+            "newly_loaded_tools": after - before,
+        })
+
+    return {
+        "registered_skill_count": len(registry.list_skills()),
+        "loaded_tool_count": registry.get_loaded_tool_count(),
+        "avg_selected_skills": (
+            sum(len(selection["selected_skills"]) for selection in selections) / len(selections)
+            if selections else 0.0
+        ),
+        "avg_newly_loaded_tools": sum(loaded_tool_counts) / len(loaded_tool_counts) if loaded_tool_counts else 0.0,
+        "skill_distribution": skill_distribution,
+        "sample_selections": selections[:5],
+    }
 
 
 def build_failure_analysis(trajectories: list[dict[str, Any]]) -> dict[str, Any]:
@@ -421,3 +474,21 @@ def get_fixture_case(case_id: str) -> dict[str, Any] | None:
         if item.get("task_id") == case_id or case_id in item.get("task_id", ""):
             return item
     return None
+
+
+def _load_recruiting_metrics() -> dict[str, Any]:
+    configured = Path(get_settings().trajectories_dir) / "recruiting" / "latest"
+    repo_backend = Path(__file__).resolve().parents[2] / "data" / "trajectories" / "recruiting" / "latest"
+    output_dir = repo_backend if repo_backend.exists() else configured
+    if not output_dir.exists():
+        return {
+            "jobs_extracted_count": 0,
+            "apply_flow_steps_count": 0,
+            "blocked_by_login": False,
+            "blocked_by_captcha": False,
+            "safe_stop_count": 0,
+            "stop_reason_distribution": {},
+            "safe_stop_rate": 0.0,
+            "extraction_schema_pass_rate": 0.0,
+        }
+    return calculate_recruiting_metrics(output_dir)

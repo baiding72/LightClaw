@@ -7,8 +7,10 @@ User Instruction
   -> Agent Runtime
   -> Executor / GUI Grounding Baseline
   -> Gateway JSONL Trajectory
+  -> Trajectory Distillation
   -> Verifier / Reward
   -> SFT / DPO / GRPO Export
+  -> SPA-style Dense Reward Preparation
   -> Evaluation Report
 ```
 
@@ -78,3 +80,22 @@ uv run python ../scripts/export_training_data.py --fixtures
 - `grpo.jsonl`
 
 fixtures 会标注 `source=deterministic_fixture`，真实轨迹会标注 `source=trajectory`。
+
+## 6. Training Pipeline
+
+完整本地训练准备链路：
+
+```bash
+cd backend
+uv run python ../scripts/run_training_pipeline.py
+```
+
+阶段：
+
+1. `trajectory_collection`：从 recruiting fixture 收集 safe dry-run 轨迹，不登录、不上传、不提交。
+2. `trajectory_distillation`：压缩 raw trace，截断 DOM，保留 action、observation、stop_reason、error_type。
+3. `sft_dpo_grpo_export`：导出 SFT / DPO / GRPO / self-correction JSONL 和 data card。
+4. `spa_rl_preparation`：生成 stepwise progress attribution、dense reward、`ppo_ready.jsonl`。
+5. `evaluation`：运行 deterministic eval 并生成 report。
+
+该 pipeline 只做数据准备，不启动真实 SFT/DPO/PPO/GRPO 训练。

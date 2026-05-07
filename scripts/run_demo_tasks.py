@@ -12,8 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.core.config import get_settings
-from app.eval.deterministic import build_demo_action_trajectories
+from app.core.config import get_settings  # noqa: E402
+from app.eval.deterministic import build_demo_action_trajectories  # noqa: E402
+from app.recruiting import collect_fixture_trajectories  # noqa: E402
 
 
 def write_fixture_trajectories(output_dir: Path) -> list[Path]:
@@ -59,11 +60,17 @@ def main() -> None:
     settings = get_settings()
     output_dir = Path(args.output_dir or settings.trajectories_dir)
     written = write_fixture_trajectories(output_dir)
+    recruiting_summary = collect_fixture_trajectories(
+        ROOT / "backend" / "tests" / "fixtures" / "recruiting",
+        ROOT / "backend" / "data" / "trajectories" / "recruiting" / "latest",
+    )
 
     print("LightClaw deterministic demo completed.")
     print(f"Trajectories written: {len(written)}")
     for path in written:
         print(f"- {path}")
+    print("Recruiting safe dry-run:")
+    print(json.dumps(recruiting_summary, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

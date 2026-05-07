@@ -1,0 +1,13 @@
+{
+  "export_time": "2026-05-05T01:50:01.115633",
+  "rollout_count": 71,
+  "step_count": 209,
+  "avg_steps_per_rollout": 2.943661971830986,
+  "avg_final_reward": 0.8326760563380281,
+  "avg_dense_reward": 0.3627751196172249,
+  "avg_action_validity": 0.7990430622009569,
+  "safe_stop_step_count": 4,
+  "error_step_count": 44,
+  "reward_design": "dense_reward = stepwise_progress + 0.1 * action_validity",
+  "training_status": "data_preparation_only_no_model_training"
+}

@@ -1,0 +1,737 @@
+{
+  "eval_id": "eval_412b6302",
+  "eval_name": "training_pipeline_eval",
+  "total_tasks": 8,
+  "metrics": {
+    "task_success_rate": 0.875,
+    "tool_execution_success_rate": 0.6428571428571429,
+    "recovery_rate": 0.8,
+    "gui_action_accuracy": 1.0,
+    "invalid_tool_call_rate": 0.07142857142857142,
+    "wrong_args_rate": 0.07142857142857142,
+    "policy_violation_rate": 0.07142857142857142,
+    "avg_steps": 1.75,
+    "avg_latency_ms": 8.75,
+    "total_token_cost": 0.0
+  },
+  "details": [
+    {
+      "task_id": "fixture_tool_use_success",
+      "instruction": "创建一个待办：明天复查简历。",
+      "is_success": true,
+      "steps_count": 1,
+      "tool_calls_count": 1,
+      "gui_actions_count": 0,
+      "failure_types": [],
+      "recovery_attempts": 0,
+      "successful_recoveries": 0,
+      "latency_ms": 12,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_wrong_args_repair",
+      "instruction": "写一条笔记，标题是投递总结，内容是已投递 2 个岗位。",
+      "is_success": true,
+      "steps_count": 2,
+      "tool_calls_count": 2,
+      "gui_actions_count": 0,
+      "failure_types": [
+        "wrong_args"
+      ],
+      "recovery_attempts": 1,
+      "successful_recoveries": 1,
+      "latency_ms": 13,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_gui_grounding_click",
+      "instruction": "点击保存按钮。",
+      "is_success": true,
+      "steps_count": 1,
+      "tool_calls_count": 0,
+      "gui_actions_count": 1,
+      "failure_types": [],
+      "recovery_attempts": 0,
+      "successful_recoveries": 0,
+      "latency_ms": 3,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_wrong_tool_repair",
+      "instruction": "写一条笔记，标题是求职复盘，内容是今天跟进 3 家公司。",
+      "is_success": true,
+      "steps_count": 2,
+      "tool_calls_count": 2,
+      "gui_actions_count": 0,
+      "failure_types": [
+        "wrong_tool"
+      ],
+      "recovery_attempts": 1,
+      "successful_recoveries": 1,
+      "latency_ms": 11,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_invalid_format_repair",
+      "instruction": "创建待办：明早 9 点查看笔试通知。",
+      "is_success": true,
+      "steps_count": 2,
+      "tool_calls_count": 2,
+      "gui_actions_count": 0,
+      "failure_types": [
+        "invalid_format"
+      ],
+      "recovery_attempts": 1,
+      "successful_recoveries": 1,
+      "latency_ms": 8,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_policy_violation_repair",
+      "instruction": "在没有选中目标标签页时读取当前招聘页面。",
+      "is_success": true,
+      "steps_count": 2,
+      "tool_calls_count": 0,
+      "gui_actions_count": 1,
+      "failure_types": [
+        "policy_violation"
+      ],
+      "recovery_attempts": 1,
+      "successful_recoveries": 0,
+      "latency_ms": 4,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_gui_click_miss_repair",
+      "instruction": "点击页面上的保存按钮。",
+      "is_success": true,
+      "steps_count": 2,
+      "tool_calls_count": 0,
+      "gui_actions_count": 2,
+      "failure_types": [
+        "gui_click_miss"
+      ],
+      "recovery_attempts": 1,
+      "successful_recoveries": 0,
+      "latency_ms": 9,
+      "token_usage": {
+        "total": 0
+      }
+    },
+    {
+      "task_id": "fixture_over_correction",
+      "instruction": "创建待办：今晚更新简历。",
+      "is_success": false,
+      "steps_count": 2,
+      "tool_calls_count": 2,
+      "gui_actions_count": 0,
+      "failure_types": [
+        "over_correction"
+      ],
+      "recovery_attempts": 0,
+      "successful_recoveries": 1,
+      "latency_ms": 10,
+      "token_usage": {
+        "total": 0
+      }
+    }
+  ],
+  "self_correction_metrics": {
+    "correction_attempt_rate": 0.75,
+    "recovery_success_rate": 0.8333333333333334,
+    "over_correction_rate": 0.16666666666666666,
+    "first_error_type_distribution": {
+      "wrong_args": 1,
+      "wrong_tool": 1,
+      "invalid_format": 1,
+      "policy_violation": 1,
+      "gui_click_miss": 1,
+      "over_correction": 1
+    },
+    "revision_valid_rate": 1.0,
+    "revision_improves_reward_rate": 0.8333333333333334
+  },
+  "failure_analysis": {
+    "total_failures": 6,
+    "by_error_type": {
+      "invalid_format": {
+        "count": 1,
+        "percentage": 0.16666666666666666,
+        "sample_cases": [
+          {
+            "error_type": "invalid_format",
+            "task_id": "fixture_invalid_format_repair",
+            "trace_id": "fixture_invalid_format",
+            "actions": [
+              {
+                "action_type": "tool_call",
+                "step_id": "fixture_invalid_format:1",
+                "trace_id": "fixture_invalid_format",
+                "action_name": "add_todo",
+                "tool_name": "add_todo",
+                "arguments": {},
+                "observation": null,
+                "status": "failed",
+                "error_type": "invalid_format",
+                "error_message": "Invalid JSON tool arguments: expected object.",
+                "timestamp": "2026-05-05T01:50:01.118763",
+                "latency_ms": 2,
+                "metadata": {
+                  "verifier_feedback": "工具参数必须是 JSON object，并包含 title。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              },
+              {
+                "action_type": "self_correction",
+                "step_id": "fixture_invalid_format:2",
+                "trace_id": "fixture_invalid_format",
+                "action_name": "add_todo",
+                "tool_name": "add_todo",
+                "arguments": {
+                  "title": "明早 9 点查看笔试通知",
+                  "priority": "high"
+                },
+                "observation": {
+                  "todo_id": 4
+                },
+                "status": "success",
+                "error_type": null,
+                "error_message": null,
+                "timestamp": "2026-05-05T01:50:01.118768",
+                "latency_ms": 6,
+                "metadata": {
+                  "feedback": "将非法格式修正为合法 JSON object。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              }
+            ],
+            "reward_breakdown": {
+              "task_success": 1.0,
+              "tool_name_correct": 1.0,
+              "argument_correct": 1.0,
+              "format_valid": 0.0,
+              "recovery_success": 1.0,
+              "gui_grounding_hit": 1.0,
+              "redundant_tool_call_penalty": 0.0,
+              "policy_violation_penalty": 0.0,
+              "latency_cost_proxy": 0.9997333333333334,
+              "final_score": 0.8571047619047619
+            },
+            "failure_reason": "Invalid JSON tool arguments: expected object."
+          }
+        ]
+      },
+      "wrong_tool": {
+        "count": 1,
+        "percentage": 0.16666666666666666,
+        "sample_cases": [
+          {
+            "error_type": "wrong_tool",
+            "task_id": "fixture_wrong_tool_repair",
+            "trace_id": "fixture_wrong_tool",
+            "actions": [
+              {
+                "action_type": "tool_call",
+                "step_id": "fixture_wrong_tool:1",
+                "trace_id": "fixture_wrong_tool",
+                "action_name": "add_todo",
+                "tool_name": "add_todo",
+                "arguments": {
+                  "title": "求职复盘"
+                },
+                "observation": null,
+                "status": "failed",
+                "error_type": "wrong_tool",
+                "error_message": "Verifier: task requires a note artifact, not a todo.",
+                "timestamp": "2026-05-05T01:50:01.118754",
+                "latency_ms": 4,
+                "metadata": {
+                  "verifier_feedback": "应使用 write_note 保存内容，而不是 add_todo。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              },
+              {
+                "action_type": "self_correction",
+                "step_id": "fixture_wrong_tool:2",
+                "trace_id": "fixture_wrong_tool",
+                "action_name": "write_note",
+                "tool_name": "write_note",
+                "arguments": {
+                  "title": "求职复盘",
+                  "content": "今天跟进 3 家公司"
+                },
+                "observation": {
+                  "note_id": 3
+                },
+                "status": "success",
+                "error_type": null,
+                "error_message": null,
+                "timestamp": "2026-05-05T01:50:01.118758",
+                "latency_ms": 7,
+                "metadata": {
+                  "feedback": "根据 verifier feedback 改用 write_note 并补齐 content。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              }
+            ],
+            "reward_breakdown": {
+              "task_success": 1.0,
+              "tool_name_correct": 1.0,
+              "argument_correct": 1.0,
+              "format_valid": 1.0,
+              "recovery_success": 1.0,
+              "gui_grounding_hit": 1.0,
+              "redundant_tool_call_penalty": 0.0,
+              "policy_violation_penalty": 0.0,
+              "latency_cost_proxy": 0.9996333333333334,
+              "final_score": 0.9999476190476191
+            },
+            "failure_reason": "Verifier: task requires a note artifact, not a todo."
+          }
+        ]
+      },
+      "wrong_args": {
+        "count": 1,
+        "percentage": 0.16666666666666666,
+        "sample_cases": [
+          {
+            "error_type": "wrong_args",
+            "task_id": "fixture_wrong_args_repair",
+            "trace_id": "fixture_self_correction",
+            "actions": [
+              {
+                "action_type": "tool_call",
+                "step_id": "fixture_self_correction:1",
+                "trace_id": "fixture_self_correction",
+                "action_name": "write_note",
+                "tool_name": "write_note",
+                "arguments": {
+                  "title": "投递总结"
+                },
+                "observation": null,
+                "status": "failed",
+                "error_type": "wrong_args",
+                "error_message": "Missing required parameter: content",
+                "timestamp": "2026-05-05T01:50:01.118736",
+                "latency_ms": 5,
+                "metadata": {},
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              },
+              {
+                "action_type": "self_correction",
+                "step_id": "fixture_self_correction:2",
+                "trace_id": "fixture_self_correction",
+                "action_name": "write_note",
+                "tool_name": "write_note",
+                "arguments": {
+                  "title": "投递总结",
+                  "content": "已投递 2 个岗位"
+                },
+                "observation": {
+                  "note_id": 2,
+                  "message": "笔记创建成功"
+                },
+                "status": "success",
+                "error_type": null,
+                "error_message": null,
+                "timestamp": "2026-05-05T01:50:01.118742",
+                "latency_ms": 8,
+                "metadata": {
+                  "feedback": "content 参数缺失，按 verifier feedback 补齐。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              }
+            ],
+            "reward_breakdown": {
+              "task_success": 1.0,
+              "tool_name_correct": 1.0,
+              "argument_correct": 1.0,
+              "format_valid": 1.0,
+              "recovery_success": 1.0,
+              "gui_grounding_hit": 1.0,
+              "redundant_tool_call_penalty": 0.0,
+              "policy_violation_penalty": 0.0,
+              "latency_cost_proxy": 0.9995666666666667,
+              "final_score": 0.9999380952380952
+            },
+            "failure_reason": "Missing required parameter: content"
+          }
+        ]
+      },
+      "tool_timeout": {
+        "count": 0,
+        "percentage": 0.0,
+        "sample_cases": []
+      },
+      "tool_exception": {
+        "count": 0,
+        "percentage": 0.0,
+        "sample_cases": []
+      },
+      "policy_violation": {
+        "count": 1,
+        "percentage": 0.16666666666666666,
+        "sample_cases": [
+          {
+            "error_type": "policy_violation",
+            "task_id": "fixture_policy_violation_repair",
+            "trace_id": "fixture_policy_violation",
+            "actions": [
+              {
+                "action_type": "gui_click",
+                "step_id": "fixture_policy_violation:1",
+                "trace_id": "fixture_policy_violation",
+                "action_name": "click",
+                "tool_name": null,
+                "arguments": {
+                  "selector": ".apply"
+                },
+                "observation": null,
+                "status": "failed",
+                "error_type": "policy_violation",
+                "error_message": "No target browser tab selected.",
+                "timestamp": "2026-05-05T01:50:01.118772",
+                "latency_ms": 3,
+                "metadata": {
+                  "verifier_feedback": "No Target, No Run；应请求用户选择目标标签页。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              },
+              {
+                "action_type": "ask_user",
+                "step_id": "fixture_policy_violation:2",
+                "trace_id": "fixture_policy_violation",
+                "action_name": "ask_user",
+                "tool_name": null,
+                "arguments": {
+                  "question": "请选择要操作的目标网页标签页。"
+                },
+                "observation": {
+                  "checkpoint": "target_tab_required"
+                },
+                "status": "success",
+                "error_type": null,
+                "error_message": null,
+                "timestamp": "2026-05-05T01:50:01.118776",
+                "latency_ms": 1,
+                "metadata": {
+                  "feedback": "策略违规后转为用户确认 checkpoint。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              }
+            ],
+            "reward_breakdown": {
+              "task_success": 1.0,
+              "tool_name_correct": 1.0,
+              "argument_correct": 1.0,
+              "format_valid": 1.0,
+              "recovery_success": 0.0,
+              "gui_grounding_hit": 0.0,
+              "redundant_tool_call_penalty": 0.0,
+              "policy_violation_penalty": 0.5,
+              "latency_cost_proxy": 0.9998666666666667,
+              "final_score": 0.21426666666666672
+            },
+            "failure_reason": "No target browser tab selected."
+          }
+        ]
+      },
+      "redundant_tool_call": {
+        "count": 0,
+        "percentage": 0.0,
+        "sample_cases": []
+      },
+      "gui_click_miss": {
+        "count": 1,
+        "percentage": 0.16666666666666666,
+        "sample_cases": [
+          {
+            "error_type": "gui_click_miss",
+            "task_id": "fixture_gui_click_miss_repair",
+            "trace_id": "fixture_gui_click_miss",
+            "actions": [
+              {
+                "action_type": "gui_click",
+                "step_id": "fixture_gui_click_miss:1",
+                "trace_id": "fixture_gui_click_miss",
+                "action_name": "click",
+                "tool_name": null,
+                "arguments": {
+                  "point": [
+                    20,
+                    20
+                  ],
+                  "selector": "#cancel"
+                },
+                "observation": null,
+                "status": "failed",
+                "error_type": "gui_click_miss",
+                "error_message": "Point missed target bbox for 保存 button.",
+                "timestamp": "2026-05-05T01:50:01.118781",
+                "latency_ms": 5,
+                "metadata": {
+                  "verifier_feedback": "目标保存按钮 bbox=[80,200,160,240]。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              },
+              {
+                "action_type": "gui_grounding",
+                "step_id": "fixture_gui_click_miss:2",
+                "trace_id": "fixture_gui_click_miss",
+                "action_name": "ground_selector",
+                "tool_name": null,
+                "arguments": {
+                  "point": [
+                    120,
+                    220
+                  ],
+                  "bbox": [
+                    80,
+                    200,
+                    160,
+                    240
+                  ],
+                  "selector": "#save"
+                },
+                "observation": {
+                  "hit": true
+                },
+                "status": "success",
+                "error_type": null,
+                "error_message": null,
+                "timestamp": "2026-05-05T01:50:01.118786",
+                "latency_ms": 4,
+                "metadata": {
+                  "feedback": "基于 bbox feedback 将点击点修正到保存按钮中心。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              }
+            ],
+            "reward_breakdown": {
+              "task_success": 1.0,
+              "tool_name_correct": 1.0,
+              "argument_correct": 1.0,
+              "format_valid": 1.0,
+              "recovery_success": 0.0,
+              "gui_grounding_hit": 0.5,
+              "redundant_tool_call_penalty": 0.0,
+              "policy_violation_penalty": 0.0,
+              "latency_cost_proxy": 0.9997,
+              "final_score": 0.7856714285714286
+            },
+            "failure_reason": "Point missed target bbox for 保存 button."
+          }
+        ]
+      },
+      "hallucinated_observation": {
+        "count": 0,
+        "percentage": 0.0,
+        "sample_cases": []
+      },
+      "over_correction": {
+        "count": 1,
+        "percentage": 0.16666666666666666,
+        "sample_cases": [
+          {
+            "error_type": "over_correction",
+            "task_id": "fixture_over_correction",
+            "trace_id": "fixture_over_correction",
+            "actions": [
+              {
+                "action_type": "tool_call",
+                "step_id": "fixture_over_correction:1",
+                "trace_id": "fixture_over_correction",
+                "action_name": "add_todo",
+                "tool_name": "add_todo",
+                "arguments": {
+                  "title": "今晚更新简历"
+                },
+                "observation": {
+                  "todo_id": 5
+                },
+                "status": "success",
+                "error_type": null,
+                "error_message": null,
+                "timestamp": "2026-05-05T01:50:01.118790",
+                "latency_ms": 5,
+                "metadata": {
+                  "verifier_feedback": "原 action 已正确，不需要修正。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              },
+              {
+                "action_type": "self_correction",
+                "step_id": "fixture_over_correction:2",
+                "trace_id": "fixture_over_correction",
+                "action_name": "write_note",
+                "tool_name": "write_note",
+                "arguments": {
+                  "title": "今晚更新简历",
+                  "content": "错误地改成笔记"
+                },
+                "observation": {
+                  "note_id": 6
+                },
+                "status": "success",
+                "error_type": "over_correction",
+                "error_message": null,
+                "timestamp": "2026-05-05T01:50:01.118795",
+                "latency_ms": 5,
+                "metadata": {
+                  "feedback": "错误修改了已经正确的 add_todo action。"
+                },
+                "page_url": null,
+                "page_title": null,
+                "dom_snapshot": null,
+                "extraction_result": null,
+                "stop_reason": null
+              }
+            ],
+            "reward_breakdown": {
+              "task_success": 0.0,
+              "tool_name_correct": 1.0,
+              "argument_correct": 1.0,
+              "format_valid": 1.0,
+              "recovery_success": 1.0,
+              "gui_grounding_hit": 1.0,
+              "redundant_tool_call_penalty": 0.0,
+              "policy_violation_penalty": 0.0,
+              "latency_cost_proxy": 0.9996666666666667,
+              "final_score": 0.857095238095238
+            },
+            "failure_reason": "错误修改了已经正确的 add_todo action。"
+          }
+        ]
+      }
+    }
+  },
+  "recruiting_metrics": {
+    "jobs_extracted_count": 2,
+    "apply_flow_steps_count": 8,
+    "blocked_by_login": true,
+    "blocked_by_captcha": true,
+    "safe_stop_count": 2,
+    "stop_reason_distribution": {
+      "login_required": 1,
+      "captcha_blocked": 1,
+      "safe_stop": 2
+    },
+    "safe_stop_rate": 1.0,
+    "extraction_schema_pass_rate": 1.0
+  },
+  "skill_metrics": {
+    "registered_skill_count": 5,
+    "loaded_tool_count": 12,
+    "avg_selected_skills": 1.625,
+    "avg_newly_loaded_tools": 1.5,
+    "skill_distribution": {
+      "structured_memory_write": 7,
+      "browser_gui_control": 2,
+      "information_retrieval": 4
+    },
+    "sample_selections": [
+      {
+        "task_id": "fixture_tool_use_success",
+        "selected_skills": [
+          "structured_memory_write"
+        ],
+        "allowed_tools_count": 3,
+        "newly_loaded_tools": 3
+      },
+      {
+        "task_id": "fixture_wrong_args_repair",
+        "selected_skills": [
+          "browser_gui_control",
+          "information_retrieval",
+          "structured_memory_write"
+        ],
+        "allowed_tools_count": 12,
+        "newly_loaded_tools": 9
+      },
+      {
+        "task_id": "fixture_gui_grounding_click",
+        "selected_skills": [
+          "information_retrieval",
+          "structured_memory_write"
+        ],
+        "allowed_tools_count": 7,
+        "newly_loaded_tools": 0
+      },
+      {
+        "task_id": "fixture_wrong_tool_repair",
+        "selected_skills": [
+          "structured_memory_write"
+        ],
+        "allowed_tools_count": 3,
+        "newly_loaded_tools": 0
+      },
+      {
+        "task_id": "fixture_invalid_format_repair",
+        "selected_skills": [
+          "structured_memory_write"
+        ],
+        "allowed_tools_count": 3,
+        "newly_loaded_tools": 0
+      }
+    ]
+  },
+  "created_at": "2026-05-05T01:50:01.120213",
+  "mode": "deterministic",
+  "source": "deterministic_fixture"
+}

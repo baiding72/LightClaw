@@ -36,6 +36,13 @@ class AgentActionStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class StopReason(StrEnum):
+    LOGIN_REQUIRED = "login_required"
+    CAPTCHA_BLOCKED = "captcha_blocked"
+    SAFE_STOP = "safe_stop"
+    TASK_COMPLETED = "task_completed"
+
+
 class ToolArgumentValidation(BaseModel):
     """Normalized tool argument validation result."""
 
@@ -63,6 +70,11 @@ class AgentAction(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
     latency_ms: int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    page_url: str | None = None
+    page_title: str | None = None
+    dom_snapshot: str | None = None
+    extraction_result: Any | None = None
+    stop_reason: StopReason | None = None
 
     @field_validator("step_id", "trace_id")
     @classmethod

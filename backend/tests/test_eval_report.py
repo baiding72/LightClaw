@@ -13,6 +13,9 @@ def test_eval_report_contains_self_correction_and_failure_analysis() -> None:
     assert report.failure_analysis["total_failures"] > 0
     assert "wrong_args" in report.failure_analysis["by_error_type"]
     assert report.failure_analysis["by_error_type"]["wrong_args"]["sample_cases"]
+    assert report.skill_metrics["registered_skill_count"] == 5
+    assert report.skill_metrics["loaded_tool_count"] > 0
+    assert report.skill_metrics["sample_selections"]
 
 
 def test_failure_analysis_keeps_sample_cases() -> None:

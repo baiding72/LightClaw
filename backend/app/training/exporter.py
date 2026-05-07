@@ -32,7 +32,7 @@ def load_trajectory_events(trajectory_dir: Path) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     if not trajectory_dir.exists():
         return events
-    for path in sorted(trajectory_dir.glob("*.jsonl")):
+    for path in sorted(trajectory_dir.rglob("*.jsonl")):
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
@@ -48,6 +48,11 @@ def load_trajectory_events(trajectory_dir: Path) -> list[dict[str, Any]]:
 def actions_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     for event in events:
+        if event.get("action_type") and event.get("trace_id"):
+            event.setdefault("metadata", {})
+            event["metadata"]["source_file"] = event.get("_source_file")
+            actions.append(event)
+            continue
         if event.get("event_type") != "step":
             continue
         if event.get("action"):
@@ -78,7 +83,10 @@ def actions_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def build_sft_rows(trajectories: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in trajectories:
-        successful = [a for a in item["actions"] if a.get("status") == "success"]
+        if item.get("sample_type") == "recruiting_safe_stop":
+            successful = item["actions"]
+        else:
+            successful = [a for a in item["actions"] if a.get("status") == "success"]
         if not successful:
             continue
         rows.append({
@@ -89,8 +97,10 @@ def build_sft_rows(trajectories: list[dict[str, Any]]) -> list[dict[str, Any]]:
             ],
             "metadata": {
                 "task_id": item["task_id"],
-                "sample_type": "sft",
+                "sample_type": item.get("sample_type", "sft"),
                 "source": item.get("source", "trajectory"),
+                "safety_domain": item.get("safety_domain"),
+                "stop_reason_distribution": item.get("stop_reason_distribution"),
             },
         })
     return rows
@@ -120,6 +130,8 @@ def build_dpo_rows(trajectories: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "metadata": {
                         "task_id": item["task_id"],
                         "source": item.get("source", "trajectory"),
+                        "sample_type": item.get("sample_type"),
+                        "safety_domain": item.get("safety_domain"),
                         "failure_type": action.get("error_type"),
                         "pair_reason": action.get("error_type") or "recovery_success",
                         "chosen_reward": chosen_reward,
@@ -169,6 +181,8 @@ def build_grpo_rows(trajectories: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "metadata": {
                 "task_id": item["task_id"],
                 "source": item.get("source", "trajectory"),
+                "sample_type": item.get("sample_type"),
+                "safety_domain": item.get("safety_domain"),
                 "low_signal_group": len(candidates) < 2 or len(set(scores)) <= 1,
             },
         })
@@ -196,11 +210,13 @@ def build_export_rows(
             trace_id = action.get("trace_id") or "unknown_trace"
             grouped_actions.setdefault(trace_id, []).append(action)
         for trace_id, trace_actions in grouped_actions.items():
+            trajectory_tags = classify_trajectory(trace_actions)
             trajectories.append({
                 "task_id": trace_id,
                 "instruction": f"Exported from recorded LightClaw trajectory {trace_id}.",
                 "actions": trace_actions,
                 "source": "trajectory",
+                **trajectory_tags,
             })
     if include_fixtures:
         for item in build_demo_action_trajectories():
@@ -213,6 +229,29 @@ def build_export_rows(
         "dpo": build_dpo_rows(trajectories),
         "grpo": build_grpo_rows(trajectories),
         "self_correction": build_self_correction_rows(trajectories),
+    }
+
+
+def classify_trajectory(actions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Attach lightweight export tags for domain-specific recorded traces."""
+    is_recruiting = any(action.get("tool_name") == "recruiting_browser" for action in actions)
+    if not is_recruiting:
+        return {}
+
+    stop_distribution: dict[str, int] = {}
+    for action in actions:
+        reason = action.get("stop_reason")
+        if reason:
+            stop_distribution[str(reason)] = stop_distribution.get(str(reason), 0) + 1
+
+    has_safe_stop = any(
+        reason in {"login_required", "captcha_blocked", "safe_stop"}
+        for reason in stop_distribution
+    )
+    return {
+        "sample_type": "recruiting_safe_stop" if has_safe_stop else "recruiting_extraction",
+        "safety_domain": "recruiting",
+        "stop_reason_distribution": stop_distribution,
     }
 
 
@@ -260,6 +299,10 @@ def build_data_card(
         "error_type",
     )
     action_distribution = _distribution(actions, "action_type")
+    sample_type_distribution = _distribution(
+        [row.get("metadata", {}) for family in rows.values() for row in family],
+        "sample_type",
+    )
     total_samples = sum(len(value) for value in rows.values())
     valid_samples = max(total_samples - invalid_samples, 0)
     step_counts = [
@@ -276,6 +319,7 @@ def build_data_card(
         "self_correction_count": len(rows.get("self_correction", [])),
         "error_type_distribution": error_distribution,
         "action_type_distribution": action_distribution,
+        "sample_type_distribution": sample_type_distribution,
         "avg_steps": sum(step_counts) / len(step_counts) if step_counts else 0.0,
         "chosen_reward_avg": sum(chosen_rewards) / len(chosen_rewards) if chosen_rewards else 0.0,
         "rejected_reward_avg": sum(rejected_rewards) / len(rejected_rewards) if rejected_rewards else 0.0,

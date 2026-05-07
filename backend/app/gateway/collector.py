@@ -41,6 +41,7 @@ class GatewayCollector:
         difficulty: Optional[str] = None,
         target_state: Optional[dict[str, Any]] = None,
         browser_context: Optional[dict[str, Any]] = None,
+        selected_skills: Optional[list[dict[str, Any]]] = None,
     ) -> str:
         """记录任务开始"""
         event_id = str(uuid.uuid4())
@@ -52,6 +53,7 @@ class GatewayCollector:
             category=category,
             difficulty=difficulty,
             allowed_tools=allowed_tools,
+            selected_skills=selected_skills or [],
             target_state=target_state,
             browser_context=browser_context,
         )

@@ -23,6 +23,30 @@ backend/data/exports/
 
 默认读取 `backend/data/trajectories/` 下真实 JSONL 轨迹；`--fixtures` 会额外加入 deterministic fixtures，并在 metadata 中标注 `source=deterministic_fixture`。
 
+推荐主 demo 顺序：
+
+```bash
+cd backend
+uv run python ../scripts/collect_recruiting_trajectories.py --mode fixture
+uv run python ../scripts/export_training_data.py --fixtures --with-data-card --output-dir data/training_exports/latest
+```
+
+导出器会递归读取 `backend/data/trajectories/**/*.jsonl`。因此 recruiting safe dry-run 生成的 `backend/data/trajectories/recruiting/latest/traces.jsonl` 会进入 SFT 样本池；它只包含 open / extract / click job / safe stop 轨迹，不包含真实投递、登录、上传或提交。
+
+Recruiting 轨迹会被显式标注：
+
+```json
+{
+  "sample_type": "recruiting_safe_stop",
+  "safety_domain": "recruiting",
+  "stop_reason_distribution": {
+    "login_required": 1,
+    "captcha_blocked": 1,
+    "safe_stop": 2
+  }
+}
+```
+
 ## SFT JSONL
 
 用于成功 tool-use / self-correction / GUI grounding 轨迹。
@@ -37,7 +61,9 @@ backend/data/exports/
   "metadata": {
     "task_id": "fixture_tool_use_success",
     "sample_type": "sft",
-    "source": "deterministic_fixture"
+    "source": "deterministic_fixture",
+    "safety_domain": null,
+    "stop_reason_distribution": null
   }
 }
 ```
@@ -132,6 +158,7 @@ backend/data/exports/
 | `self_correction_count` | self-correction 样本数 |
 | `error_type_distribution` | 错误类型分布 |
 | `action_type_distribution` | action 类型分布 |
+| `sample_type_distribution` | `sft`、`recruiting_safe_stop` 等样本类型分布 |
 | `avg_steps` | GRPO candidate 平均步数 |
 | `chosen_reward_avg` | DPO chosen 平均 reward |
 | `rejected_reward_avg` | DPO rejected 平均 reward |

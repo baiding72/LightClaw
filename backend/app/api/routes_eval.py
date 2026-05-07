@@ -57,6 +57,32 @@ async def get_latest_eval_report() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to read latest report: {exc}") from exc
 
 
+@router.get("/data-card/latest")
+async def get_latest_data_card() -> dict[str, Any]:
+    """读取 latest training export data_card.json。"""
+    settings = get_settings()
+    data_card_path = Path(settings.data_dir) / "training_exports" / "latest" / "data_card.json"
+    if not data_card_path.exists():
+        raise HTTPException(status_code=404, detail="Latest data card not found")
+    try:
+        return json.loads(data_card_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to read latest data card: {exc}") from exc
+
+
+@router.get("/showcase/latest")
+async def get_latest_showcase() -> dict[str, Any]:
+    """读取一键演示脚本生成的 showcase.json。"""
+    settings = get_settings()
+    showcase_path = Path(settings.data_dir) / "showcase" / "latest" / "showcase.json"
+    if not showcase_path.exists():
+        raise HTTPException(status_code=404, detail="Latest showcase report not found")
+    try:
+        return json.loads(showcase_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to read latest showcase: {exc}") from exc
+
+
 @router.get("/{eval_id}", response_model=EvaluationResponse)
 async def get_evaluation(
     eval_id: str,

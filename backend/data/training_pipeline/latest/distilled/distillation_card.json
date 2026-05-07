@@ -1,0 +1,13 @@
+{
+  "export_time": "2026-05-05T01:50:01.099880",
+  "source_trajectory_dir": "data/trajectories",
+  "distilled_count": 19,
+  "avg_steps": 8.105263157894736,
+  "avg_quality_score": 0.7773066268911144,
+  "sample_type_distribution": {
+    "recruiting_safe_stop": 1,
+    "trajectory_distilled": 18
+  },
+  "safe_stop_count": 1,
+  "include_failed": true
+}
