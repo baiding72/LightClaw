@@ -51,6 +51,11 @@ class StepEvent:
     latency_ms: int = 0
     token_usage: Optional[dict[str, int]] = None
 
+    # RL Metrics
+    progress_score: Optional[float] = None
+    grounding_score: Optional[float] = None
+    step_reward: Optional[float] = None
+
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
@@ -74,6 +79,9 @@ class StepEvent:
             "gui_action_type": self.gui_action_type,
             "latency_ms": self.latency_ms,
             "token_usage": self.token_usage,
+            "progress_score": self.progress_score,
+            "grounding_score": self.grounding_score,
+            "step_reward": self.step_reward,
         }
 
 

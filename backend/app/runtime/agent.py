@@ -22,6 +22,8 @@ from app.scenarios import detect_job_site_profile, detect_login_state
 from app.schemas.task import TaskDefinition
 from app.schemas.trajectory import Trajectory, TrajectoryStep
 from app.tools import get_tool_registry
+from app.rl.progress_estimator import ProgressEstimator
+from app.rl.reward import calculate_step_reward
 
 
 class Agent:
@@ -48,6 +50,7 @@ class Agent:
         self.memory = MemoryManager()
         self.gateway = GatewayCollector()
         self.skill_selector = SkillSelector(get_tool_registry())
+        self.progress_estimator = ProgressEstimator(mode="heuristic")
 
         # 状态
         self.state: Optional[AgentState] = None
@@ -253,6 +256,22 @@ class Agent:
                 observation = await self.observer.observe(tool_name, result, self.state)
                 self.state.advance_subgoal()
 
+                # ==== RL Metrics Computation ====
+                grounding_score = 1.0 if result.success else 0.0
+                if not result.success and tool_name in ["click", "type_text", "select_option"]:
+                    grounding_score = -0.5
+                progress_score = await self.progress_estimator.estimate(self.state)
+                step_reward = calculate_step_reward(progress_score, grounding_score)
+                
+                # Update the state tool_call with RL metrics
+                if self.state.tool_calls:
+                    self.state.tool_calls[-1]["progress_score"] = progress_score
+                    self.state.tool_calls[-1]["grounding_score"] = grounding_score
+                    self.state.tool_calls[-1]["step_reward"] = step_reward
+                
+                logger.info(f"[RL] Step {self.state.current_step} - Progress: {progress_score:.2f}, Grounding: {grounding_score:.2f}, Reward: {step_reward:.2f}")
+                # ================================
+
                 runtime_checkpoint = self._maybe_create_runtime_checkpoint(tool_name, result)
                 if runtime_checkpoint:
                     self.state.add_checkpoint(**runtime_checkpoint)
@@ -262,6 +281,9 @@ class Agent:
                         result=result,
                         observation=observation,
                         error_type=result.error_type,
+                        progress_score=progress_score,
+                        grounding_score=grounding_score,
+                        step_reward=step_reward,
                     )
                     break
 
@@ -271,6 +293,9 @@ class Agent:
                     result=result,
                     observation=observation,
                     error_type=result.error_type,
+                    progress_score=progress_score,
+                    grounding_score=grounding_score,
+                    step_reward=step_reward,
                 )
 
                 # 处理失败

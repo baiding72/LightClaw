@@ -304,6 +304,9 @@ class AgentState:
         tool_args: dict[str, Any],
         result: Optional[dict[str, Any]] = None,
         error: Optional[str] = None,
+        progress_score: Optional[float] = None,
+        grounding_score: Optional[float] = None,
+        step_reward: Optional[float] = None,
     ) -> None:
         self.tool_calls.append({
             "step": self.current_step,
@@ -311,6 +314,9 @@ class AgentState:
             "args": tool_args,
             "result": result,
             "error": error,
+            "progress_score": progress_score,
+            "grounding_score": grounding_score,
+            "step_reward": step_reward,
             "timestamp": datetime.now().isoformat(),
         })
         self.refresh_memory_summary()

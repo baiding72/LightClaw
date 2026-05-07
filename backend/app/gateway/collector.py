@@ -101,6 +101,9 @@ class GatewayCollector:
         result: ToolResult,
         observation: Optional[str] = None,
         error_type: Optional[str] = None,
+        progress_score: Optional[float] = None,
+        grounding_score: Optional[float] = None,
+        step_reward: Optional[float] = None,
     ) -> None:
         """记录步骤结束"""
         # 更新事件
@@ -111,6 +114,9 @@ class GatewayCollector:
             "observation": observation,
             "latency_ms": result.latency_ms,
             "screenshot_path": result.screenshot_path,
+            "progress_score": progress_score,
+            "grounding_score": grounding_score,
+            "step_reward": step_reward,
         }
 
         # 找到对应的步骤事件并更新
