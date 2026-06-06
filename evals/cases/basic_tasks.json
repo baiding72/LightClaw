@@ -1,0 +1,124 @@
+{
+  "suite_id": "basic_tasks",
+  "title": "CyberClaw README style basic agent tasks",
+  "description": "第一层 agent 级评测：真实启动新会话，覆盖时间、计算、任务、文件、Shell、记忆和 trace 完整性。",
+  "policy_mode": "monitor",
+  "cases": [
+    {
+      "case_id": "time_basic",
+      "title": "time query should use get_time",
+      "turns": [
+        {
+          "input": "现在几点了？",
+          "assertions": {
+            "required_tools": ["get_time"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "calc_basic",
+      "title": "arithmetic should use calculator",
+      "turns": [
+        {
+          "input": "帮我算一下 25 乘以 48",
+          "assertions": {
+            "required_tools": ["calculator"],
+            "answer_contains": ["1200"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "task_create",
+      "title": "daily reminder should create a scheduled task",
+      "turns": [
+        {
+          "input": "每天早上 8 点提醒我喝水",
+          "assertions": {
+            "required_tools": ["schedule_task"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "task_list",
+      "title": "task list should read scheduled tasks",
+      "turns": [
+        {
+          "input": "我都有哪些任务？",
+          "assertions": {
+            "required_tools": ["list_tasks"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "file_list",
+      "title": "office file listing should use sandbox file tool",
+      "turns": [
+        {
+          "input": "看看 office 里有什么文件",
+          "assertions": {
+            "required_tools": ["list_office_files"],
+            "forbidden_tools": ["web_search", "read_url"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "file_create",
+      "title": "creating a Python file should use write_office_file",
+      "turns": [
+        {
+          "input": "创建 test.py，内容是 print(\"hello myclaw\")",
+          "assertions": {
+            "required_tools": ["write_office_file"],
+            "forbidden_tools": ["web_search", "read_url"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "shell_run",
+      "title": "running the created Python file should use sandbox shell",
+      "turns": [
+        {
+          "input": "创建 test.py，内容是 print(\"hello myclaw\")",
+          "assertions": {
+            "required_tools": ["write_office_file"],
+            "forbidden_tools": ["web_search", "read_url"]
+          }
+        },
+        {
+          "input": "运行 python test.py",
+          "assertions": {
+            "required_tools": ["execute_office_shell"],
+            "tool_result_contains": ["hello myclaw"],
+            "forbidden_tools": ["web_search", "read_url"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "profile_write",
+      "title": "explicit preference should write user profile",
+      "turns": [
+        {
+          "input": "记住我喜欢喝冰美式",
+          "assertions": {
+            "one_of_required_tools": [["save_user_profile"]],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    }
+  ]
+}

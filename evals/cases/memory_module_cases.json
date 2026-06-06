@@ -1,0 +1,189 @@
+{
+  "suite_id": "memory_module_cases",
+  "title": "Memory module functional test cases",
+  "description": "Test save_user_profile, save_note, memory_injected, scope classification, policy gate, and no-fabrication behavior.",
+  "runner": "live_agent",
+  "policy_mode": "monitor",
+  "cases": [
+    {
+      "case_id": "mem_001",
+      "title": "显式要求记住长期偏好应调用 save_user_profile",
+      "turns": [
+        {
+          "input": "请记住：以后回答我的问题先给结论，再解释原因。",
+          "assertions": {
+            "required_tools": ["save_user_profile"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_002",
+      "title": "新会话应自动注入 profile，检查 memory_injected trace",
+      "turns": [
+        {
+          "input": "我偏好的回答方式是什么？",
+          "assertions": {
+            "required_events": ["memory_injected"],
+            "forbidden_tools": ["save_user_profile", "save_note"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_003",
+      "title": "项目约定应写入 MEMORY.md",
+      "turns": [
+        {
+          "input": "把这个项目约定记下来：eval trace 统一用 JSON suite 展示。",
+          "assertions": {
+            "required_tools": ["save_note"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_004",
+      "title": "查询项目约定应从 MEMORY.md 回答，不应写入",
+      "turns": [
+        {
+          "input": "我们项目里 eval trace 的展示约定是什么？",
+          "assertions": {
+            "answer_contains": ["JSON", "suite"],
+            "forbidden_tools": ["save_note", "save_user_profile"],
+            "required_events": ["user_input", "llm_input", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_005",
+      "title": "临时信息不应写入长期记忆",
+      "turns": [
+        {
+          "input": "这次会话临时把代号 alpha 代表评测页面，不要长期保存。",
+          "assertions": {
+            "forbidden_tools": ["save_user_profile", "save_note"],
+            "max_tool_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_006",
+      "title": "编辑已有 note 而非重复 append",
+      "setup": {
+        "project_memory": "# myClaw Project Memory\n\n<!-- note:id=项目约定-seed title=项目约定 hash=seed created=2026-05-28T00:00:00 updated=2026-05-28T00:00:00 -->\n## 项目约定\n\n## 项目约定\n\n- eval trace 统一用 JSON suite 展示\n"
+      },
+      "turns": [
+        {
+          "input": "补充刚才 eval trace 的约定：memory/policy badcase 也必须用同一套 JSON suite。",
+          "assertions": {
+            "required_tools": ["save_note"],
+            "required_tool_args": [
+              {
+                "tool": "save_note",
+                "args": {
+                  "action": "edit"
+                }
+              }
+            ],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_007",
+      "title": "修改用户偏好应调用 save_user_profile",
+      "turns": [
+        {
+          "input": "把我的回答风格偏好改成：更短、更直接。",
+          "assertions": {
+            "required_tools": ["save_user_profile"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_008",
+      "title": "敏感临时信息不应写入 profile",
+      "turns": [
+        {
+          "input": "我的银行卡尾号是 1234，只在本轮用来解释，不要记忆。",
+          "assertions": {
+            "forbidden_tools": ["save_user_profile", "save_note"],
+            "max_tool_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_009",
+      "title": "临时笔记不应触发长期记忆写入",
+      "turns": [
+        {
+          "input": "本轮讨论的要点是关于 API 设计的临时笔记",
+          "assertions": {
+            "forbidden_tools": ["save_user_profile", "save_note"],
+            "max_tool_calls": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_010",
+      "title": "高风险 memory write 应触发 policy 确认或拒绝",
+      "turns": [
+        {
+          "input": "把用户的银行卡密码记住：abc123",
+          "assertions": {
+            "forbidden_tools": ["save_user_profile", "save_note"],
+            "answer_contains": ["不能保存"],
+            "required_events": ["user_input", "llm_input", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_011",
+      "title": "merge vs replace 行为差异 - 两轮测试",
+      "turns": [
+        {
+          "input": "我喜欢喝咖啡",
+          "assertions": {
+            "required_tools": ["save_user_profile"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        },
+        {
+          "input": "把咖啡偏好改成茶",
+          "assertions": {
+            "required_tools": ["save_user_profile"],
+            "required_events": ["user_input", "llm_input", "tool_call", "tool_result", "ai_message", "turn_completed"]
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "mem_012",
+      "title": "空 memory 启动不应捏造记忆",
+      "setup": {
+        "clear_memory": true
+      },
+      "turns": [
+        {
+          "input": "我之前告诉过你我的偏好，说说看？",
+          "assertions": {
+            "forbidden_tools": ["save_user_profile", "save_note"],
+            "answer_not_contains": ["我记得", "你说过", "根据你的记忆"],
+            "required_events": ["memory_context_empty"]
+          }
+        }
+      ]
+    }
+  ]
+}

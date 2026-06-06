@@ -1,112 +1,92 @@
-import unittest
-import os
-import sys
-from unittest.mock import Mock, patch, MagicMock
+"""Basic tests for myClaw agent - Custom ReAct harness."""
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import pytest
 
-from cyberclaw.core.context import AgentState
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from core.agent import create_agent_harness, AgentHarness
+from core.state import AgentState
+from core.tools.builtins import ALL_TOOLS, get_time, calculator, echo
 
 
-class TestAgent(unittest.TestCase):
+class TestBuiltinTools:
+    """Test the built-in tools."""
 
-    def test_agent_state_initialization(self):
-        """测试 AgentState 的初始化"""
-        from cyberclaw.core.context import AgentState
+    def test_get_time(self):
+        """Test the get_time tool returns a string."""
+        result = get_time.invoke({})
+        assert isinstance(result, str)
+        assert len(result) > 0
 
-        initial_state = AgentState(
-            messages=[],
-            summary=""
-        )
+    def test_calculator(self):
+        """Test the calculator tool."""
+        assert calculator.invoke({"expression": "1+1"}) == "2"
+        assert calculator.invoke({"expression": "2*3"}) == "6"
+        assert calculator.invoke({"expression": "10-4"}) == "6"
 
-        self.assertEqual(initial_state["messages"], [])
-        self.assertEqual(initial_state["summary"], "")
-
-    @patch('cyberclaw.core.provider.get_provider')
-    @patch('cyberclaw.core.skill_loader.load_dynamic_skills')
-    @patch('cyberclaw.core.tools.builtins.BUILTIN_TOOLS', [])
-    def test_create_agent_app_basic(self, mock_load_skills, mock_get_provider):
-        """测试创建基础代理应用（带 Mock）"""
-        from cyberclaw.core.agent import create_agent_app
-
-        # Mock provider 返回值
-        mock_provider = Mock()
-        mock_provider.bind_tools.return_value = Mock()
-        mock_get_provider.return_value = mock_provider
-
-        # Mock 动态技能加载
-        mock_load_skills.return_value = []
-
-        try:
-            app = create_agent_app(provider_name="openai", model_name="gpt-4o-mini")
-            self.assertIsNotNone(app)
-        except Exception as e:
-            # 即使出现其他错误也记录
-            print(f"Unexpected error: {e}")
-            raise
-
-    @patch('cyberclaw.core.provider.get_provider')
-    @patch('cyberclaw.core.skill_loader.load_dynamic_skills')
-    @patch('cyberclaw.core.tools.builtins.BUILTIN_TOOLS', [])
-    def test_create_agent_app_with_custom_tools(self, mock_load_skills, mock_get_provider):
-        """测试创建带有自定义工具的代理应用（带 Mock）"""
-        from cyberclaw.core.agent import create_agent_app
-        from langchain_core.tools import tool
-
-        # Mock provider 返回值
-        mock_provider = Mock()
-        mock_provider.bind_tools.return_value = Mock()
-        mock_get_provider.return_value = mock_provider
-
-        # Mock 动态技能加载
-        mock_load_skills.return_value = []
-
-        # 创建一个真正的 mock 工具（使用@tool 装饰器）
-        @tool
-        def mock_tool(test_param: str) -> str:
-            """A mock tool for testing"""
-            return f"mock result: {test_param}"
-
-        try:
-            app = create_agent_app(
-                provider_name="openai",
-                model_name="gpt-4o-mini",
-                tools=[mock_tool]
-            )
-            self.assertIsNotNone(app)
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            raise
-
-    @patch('cyberclaw.core.provider.get_provider')
-    @patch('cyberclaw.core.skill_loader.load_dynamic_skills')
-    @patch('cyberclaw.core.tools.builtins.BUILTIN_TOOLS', [])
-    def test_create_agent_app_with_checkpointer(self, mock_load_skills, mock_get_provider):
-        """测试创建带有检查点的代理应用（带 Mock）"""
-        from cyberclaw.core.agent import create_agent_app
-        from langgraph.checkpoint.memory import MemorySaver
-
-        # Mock provider 返回值
-        mock_provider = Mock()
-        mock_provider.bind_tools.return_value = Mock()
-        mock_get_provider.return_value = mock_provider
-
-        # Mock 动态技能加载
-        mock_load_skills.return_value = []
-
-        memory_saver = MemorySaver()
-        try:
-            app = create_agent_app(
-                provider_name="openai",
-                model_name="gpt-4o-mini",
-                checkpointer=memory_saver
-            )
-            self.assertIsNotNone(app)
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            raise
+    def test_echo(self):
+        """Test the echo tool."""
+        result = echo.invoke({"message": "hello"})
+        assert result == "Echo: hello"
 
 
-if __name__ == '__main__':
-    unittest.main()
+class TestAgentState:
+    """Test agent state structure."""
+
+    def test_state_has_messages(self):
+        """State should have messages field."""
+        state = AgentState()
+        assert hasattr(state, "messages")
+        assert hasattr(state, "summary")
+
+    def test_add_user_message(self):
+        """Test adding user messages."""
+        state = AgentState()
+        state.add_user_message("Hello")
+        assert len(state.messages) == 1
+        assert state.messages[0].role == "user"
+        assert state.messages[0].content == "Hello"
+
+    def test_add_ai_message(self):
+        """Test adding AI messages."""
+        state = AgentState()
+        state.add_ai_message("Hello", tool_calls=[{"name": "test", "args": {}}])
+        assert len(state.messages) == 1
+        assert state.messages[0].role == "assistant"
+        assert state.messages[0].content == "Hello"
+        assert state.messages[0].tool_calls == [{"name": "test", "args": {}}]
+
+    def test_add_tool_message(self):
+        """Test adding tool messages."""
+        state = AgentState()
+        state.add_tool_message(name="calculator", content="2", tool_call_id="call_1")
+        assert len(state.messages) == 1
+        assert state.messages[0].role == "tool"
+        assert state.messages[0].name == "calculator"
+        assert state.messages[0].content == "2"
+        assert state.messages[0].tool_call_id == "call_1"
+
+
+class TestAgentHarness:
+    """Test the custom agent harness."""
+
+    def test_harness_creation(self):
+        """Test that create_agent_harness returns a harness instance."""
+        from core.provider import get_provider
+        import os
+
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            pytest.skip("No API key available")
+
+        provider = "openai" if os.environ.get("OPENAI_API_KEY") else "anthropic"
+        llm = get_provider(provider)
+        harness = create_agent_harness(llm)
+        assert harness is not None
+        assert isinstance(harness, AgentHarness)
+
+    def test_tools_are_registered(self):
+        """Test that tools are properly registered."""
+        tool_names = [t.name for t in ALL_TOOLS]
+        assert "get_time" in tool_names
+        assert "calculator" in tool_names
+        assert "echo" in tool_names
+        assert "search_local_sources" not in tool_names

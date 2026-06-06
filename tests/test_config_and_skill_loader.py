@@ -1,58 +1,58 @@
-import unittest
-import os
-import sys
-from unittest.mock import patch, MagicMock
+"""CyberClaw config/skill-loader tests migrated to myClaw."""
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from __future__ import annotations
 
 
-class TestConfig(unittest.TestCase):
+def test_config_paths_exist_and_are_path_objects():
+    from pathlib import Path
 
-    def test_config_import(self):
-        """测试配置模块导入"""
-        from cyberclaw.core.config import WORKSPACE_DIR, MEMORY_DIR, PERSONAS_DIR, SCRIPTS_DIR, OFFICE_DIR, SKILLS_DIR, DB_PATH, TASKS_FILE
+    from core.config import (
+        APPROVALS_DIR,
+        CONFIG_DIR,
+        MEMORY_DIR,
+        MYCLAW_DIR,
+        OFFICE_DIR,
+        PROJECT_ROOT,
+        RUNTIME_DIR,
+        SKILLS_DIR,
+        TASKS_FILE,
+        WORKSPACE_DIR,
+    )
 
-        # 验证配置项存在
-        self.assertIsInstance(WORKSPACE_DIR, str)
-        self.assertIsInstance(MEMORY_DIR, str)
-        self.assertIsInstance(PERSONAS_DIR, str)
-        self.assertIsInstance(SCRIPTS_DIR, str)
-        self.assertIsInstance(OFFICE_DIR, str)
-        self.assertIsInstance(SKILLS_DIR, str)
-        self.assertIsInstance(DB_PATH, str)
-        self.assertIsInstance(TASKS_FILE, str)
+    for path in [PROJECT_ROOT, MYCLAW_DIR, WORKSPACE_DIR, OFFICE_DIR, SKILLS_DIR, MEMORY_DIR, CONFIG_DIR, RUNTIME_DIR, APPROVALS_DIR, TASKS_FILE]:
+        assert isinstance(path, Path)
 
-
-class TestSkillLoader(unittest.TestCase):
-
-    def test_skill_loader_import(self):
-        """测试技能加载器模块导入"""
-        try:
-            from cyberclaw.core.skill_loader import load_dynamic_skills
-            # 确保函数存在
-            self.assertTrue(callable(load_dynamic_skills))
-        except ImportError as e:
-            # 如果导入失败，可能是因为依赖问题，但仍需确认模块结构
-            self.fail(f"无法导入技能加载器: {e}")
-
-    @patch('os.path.exists', return_value=False)
-    @patch('os.listdir', side_effect=FileNotFoundError())
-    def test_load_dynamic_skills_no_directory(self, mock_listdir, mock_exists):
-        """测试技能加载器 - 不存在的目录"""
-        from cyberclaw.core.skill_loader import load_dynamic_skills
-
-        skills = load_dynamic_skills()
-        self.assertEqual(skills, [])
-
-    @patch('os.path.exists', return_value=True)
-    @patch('os.listdir', return_value=[])
-    def test_load_dynamic_skills_empty_directory(self, mock_listdir, mock_exists):
-        """测试技能加载器 - 空目录"""
-        from cyberclaw.core.skill_loader import load_dynamic_skills
-
-        skills = load_dynamic_skills()
-        self.assertEqual(skills, [])
+    assert OFFICE_DIR.exists()
+    assert SKILLS_DIR.exists()
 
 
-if __name__ == '__main__':
-    unittest.main()
+def test_skill_loader_imports():
+    from core.skill_loader import clear_skill_cache, get_skill_count, load_dynamic_skills, reload_skills
+
+    assert callable(load_dynamic_skills)
+    assert callable(reload_skills)
+    assert callable(get_skill_count)
+    assert callable(clear_skill_cache)
+
+
+def test_load_dynamic_skills_missing_directory_returns_empty(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", tmp_path / "missing")
+    skill_loader.clear_skill_cache()
+
+    assert skill_loader.load_dynamic_skills(force_rescan=True) == []
+    assert skill_loader.get_skill_count() == 0
+
+
+def test_load_dynamic_skills_empty_directory_returns_empty(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", skills_dir)
+    skill_loader.clear_skill_cache()
+
+    assert skill_loader.load_dynamic_skills(force_rescan=True) == []
+    assert skill_loader.get_skill_count() == 0
+

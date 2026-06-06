@@ -1,0 +1,66 @@
+{
+  "suite_id": "memory_policy_badcases",
+  "title": "Memory and policy trace badcases",
+  "description": "Trace regression suite for memory scope, profile injection, source routing, note updates, and tool argument policy contracts.",
+  "runner": "trace_regression",
+  "cases": [
+    {
+      "case_id": "memory_case2_scope_consistency",
+      "title": "session-scoped code name should not be misrouted across profile/notes",
+      "trace_paths": [
+        "interactive-client-1779272455194.jsonl",
+        "interactive-client-1779272494436.jsonl"
+      ],
+      "checker": "scope_consistency"
+    },
+    {
+      "case_id": "memory_case3_profile_injection",
+      "title": "profile preference should be available in a later session",
+      "trace_paths": [
+        "interactive-client-1779272899469.jsonl",
+        "interactive-client-1779272934036.jsonl"
+      ],
+      "checker": "profile_injection"
+    },
+    {
+      "case_id": "memory_case4_explicit_memory_write",
+      "title": "explicit remember requests need controlled memory create/update",
+      "trace_paths": [
+        "interactive-client-1779273017735.jsonl"
+      ],
+      "checker": "explicit_memory_write"
+    },
+    {
+      "case_id": "memory_case5_note_update",
+      "title": "existing notes should be updated rather than duplicated",
+      "trace_paths": [
+        "interactive-client-1779273170652.jsonl"
+      ],
+      "checker": "note_update"
+    },
+    {
+      "case_id": "memory_case6_source_routing",
+      "title": "local project questions should be routed to local memory/project sources",
+      "trace_paths": [
+        "interactive-client-1779273506469.jsonl"
+      ],
+      "checker": "source_routing"
+    },
+    {
+      "case_id": "memory_case7_file_and_profile",
+      "title": "file-backed design questions and profile writes should use the right tools",
+      "trace_paths": [
+        "interactive-client-1779273968453.jsonl"
+      ],
+      "checker": "file_and_profile"
+    },
+    {
+      "case_id": "memory_case8_temporary_preference_and_schema",
+      "title": "temporary preference scope and tool argument schema should be controlled",
+      "trace_paths": [
+        "interactive-client-1779274136220.jsonl"
+      ],
+      "checker": "temporary_preference_and_schema"
+    }
+  ]
+}
