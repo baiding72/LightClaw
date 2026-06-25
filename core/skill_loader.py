@@ -13,6 +13,23 @@ from core.tools.base import FunctionTool
 from core.tools.shell import execute_office_shell
 
 
+def _parse_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value).strip()
+    if not text:
+        return []
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
 class LazySkillLoader:
     """Scan skill metadata eagerly, load full manuals only on `mode='help'`."""
 
@@ -65,20 +82,62 @@ class LazySkillLoader:
         self._last_scan_time = now
         return skills
 
-    def _extract_metadata(self, md_path: Path) -> dict[str, str] | None:
+    def _extract_metadata(self, md_path: Path) -> dict[str, Any] | None:
         try:
-            lines = md_path.read_text(encoding="utf-8", errors="replace").splitlines()[:50]
+            lines = md_path.read_text(encoding="utf-8", errors="replace").splitlines()
         except Exception:
             return None
-        content = "\n".join(lines)
-        name_match = re.search(r"^name:\s*(.+)$", content, re.MULTILINE)
-        desc_match = re.search(r"^description:\s*(.+)$", content, re.MULTILINE)
-        raw_name = name_match.group(1).strip() if name_match else md_path.parent.name
+
+        fields: dict[str, Any] = {}
+        if lines and lines[0].strip() == "---":
+            current_key: str | None = None
+            current_items: list[str] = []
+            for raw in lines[1:]:
+                if raw.strip() == "---":
+                    if current_key:
+                        fields[current_key] = current_items
+                    break
+                if raw.startswith("  - ") and current_key:
+                    current_items.append(raw[4:].strip().strip("\"'"))
+                    continue
+                if ":" not in raw:
+                    continue
+                if current_key:
+                    fields[current_key] = current_items
+                    current_key = None
+                    current_items = []
+                key, value = raw.split(":", 1)
+                key = key.strip()
+                value = value.strip().strip("\"'")
+                if value:
+                    fields[key] = value
+                else:
+                    current_key = key
+                    current_items = []
+        else:
+            content = "\n".join(lines[:50])
+            for key in ("name", "description"):
+                match = re.search(rf"^{key}:\s*(.+)$", content, re.MULTILINE)
+                if match:
+                    fields[key] = match.group(1).strip().strip("\"'")
+
+        raw_name = str(fields.get("name") or md_path.parent.name).strip("\"'")
         raw_name = raw_name.strip("\"'")
         tool_name = re.sub(r"[^a-zA-Z0-9_-]", "_", raw_name).strip("_") or md_path.parent.name
-        raw_desc = desc_match.group(1).strip() if desc_match else f"Provides {raw_name} skill functions."
-        raw_desc = raw_desc.strip("\"'")
-        return {"raw_name": raw_name, "name": tool_name, "description": raw_desc}
+        raw_desc = str(fields.get("description") or f"Provides {raw_name} skill functions.").strip("\"'")
+        return {
+            "raw_name": raw_name,
+            "name": tool_name,
+            "description": raw_desc,
+            "trigger": str(fields.get("trigger") or ""),
+            "do_not_trigger": str(fields.get("do-not-trigger") or fields.get("do_not_trigger") or ""),
+            "user_invocable": _parse_bool(fields.get("user-invocable", fields.get("user_invocable")), True),
+            "disable_auto_invoke": _parse_bool(fields.get("disable-auto-invoke", fields.get("disable_auto_invoke")), False),
+            "allowed_tools": _parse_list(fields.get("allowed-tools", fields.get("allowed_tools"))),
+            "blocked_tools": _parse_list(fields.get("blocked-tools", fields.get("blocked_tools"))),
+            "argument_hint": str(fields.get("argument-hint") or fields.get("argument_hint") or ""),
+            "tags": _parse_list(fields.get("tags")),
+        }
 
     def _create_lazy_tool(self, skill_info: dict[str, Any]) -> FunctionTool:
         def lazy_runner(mode: str, command: str = "") -> str:
@@ -112,17 +171,38 @@ class LazySkillLoader:
             },
             "required": ["mode"],
         }
-        description = (
-            f"{skill_info['description']}\n\n"
+        description_parts = [str(skill_info["description"])]
+        if skill_info.get("trigger"):
+            description_parts.append(f"Trigger: {skill_info['trigger']}")
+        if skill_info.get("do_not_trigger"):
+            description_parts.append(f"Do not trigger: {skill_info['do_not_trigger']}")
+        description_parts.append(f"User-invocable: {bool(skill_info.get('user_invocable', True))}")
+        description_parts.append(
             "External skill. First call mode='help' to read the full SKILL.md manual; "
             "then call mode='run' with command only if the manual fits the task."
         )
-        return FunctionTool(
+        description = "\n\n".join(description_parts)
+        tool = FunctionTool(
             lazy_runner,
             name=str(skill_info["name"]),
             description=description,
             parameters=parameters,
         )
+        tool.skill_metadata = {
+            key: skill_info[key]
+            for key in [
+                "raw_name",
+                "trigger",
+                "do_not_trigger",
+                "user_invocable",
+                "disable_auto_invoke",
+                "allowed_tools",
+                "blocked_tools",
+                "argument_hint",
+                "tags",
+            ]
+        }
+        return tool
 
     def get_all_tools(self, force_rescan: bool = False) -> list[FunctionTool]:
         return [self._create_lazy_tool(info) for info in self._scan_skills(force_rescan=force_rescan)]
@@ -154,4 +234,3 @@ def get_skill_count() -> int:
 
 def clear_skill_cache() -> None:
     _lazy_loader.clear_cache()
-

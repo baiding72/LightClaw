@@ -68,6 +68,75 @@ def test_lazy_skill_loader_reload_picks_up_new_skill(tmp_path, monkeypatch):
     assert {tool.name for tool in tools} == {"one", "two"}
 
 
+def test_lazy_skill_loader_parses_abu_style_metadata(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    skills_dir = tmp_path / "office" / "skills"
+    skill_dir = skills_dir / "browserish"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        """---
+name: browserish
+description: Operate a browser-like target.
+trigger: user asks to click or extract page data
+do-not-trigger: user asks for local unit tests
+user-invocable: false
+disable-auto-invoke: true
+argument-hint: <browser task>
+allowed-tools:
+  - execute_office_shell
+blocked-tools:
+  - dangerous_tool
+tags:
+  - browser
+  - automation
+---
+
+# Browserish
+
+Manual body.
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", skills_dir)
+    skill_loader.clear_skill_cache()
+
+    [tool] = skill_loader.load_dynamic_skills(force_rescan=True)
+
+    assert tool.name == "browserish"
+    assert "Operate a browser-like target." in tool.description
+    assert "Trigger: user asks to click or extract page data" in tool.description
+    assert "Do not trigger: user asks for local unit tests" in tool.description
+    assert tool.skill_metadata["trigger"] == "user asks to click or extract page data"
+    assert tool.skill_metadata["do_not_trigger"] == "user asks for local unit tests"
+    assert tool.skill_metadata["user_invocable"] is False
+    assert tool.skill_metadata["disable_auto_invoke"] is True
+    assert tool.skill_metadata["argument_hint"] == "<browser task>"
+    assert tool.skill_metadata["allowed_tools"] == ["execute_office_shell"]
+    assert tool.skill_metadata["blocked_tools"] == ["dangerous_tool"]
+    assert tool.skill_metadata["tags"] == ["browser", "automation"]
+
+
+def test_lazy_skill_loader_metadata_defaults_for_minimal_skill(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    skills_dir = tmp_path / "office" / "skills"
+    _write_skill(skills_dir, folder="plain", name="plain")
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", skills_dir)
+    skill_loader.clear_skill_cache()
+
+    [tool] = skill_loader.load_dynamic_skills(force_rescan=True)
+
+    assert tool.skill_metadata["trigger"] == ""
+    assert tool.skill_metadata["do_not_trigger"] == ""
+    assert tool.skill_metadata["user_invocable"] is True
+    assert tool.skill_metadata["disable_auto_invoke"] is False
+    assert tool.skill_metadata["allowed_tools"] == []
+    assert tool.skill_metadata["blocked_tools"] == []
+    assert tool.skill_metadata["argument_hint"] == ""
+    assert tool.skill_metadata["tags"] == []
+
+
 def test_two_stage_skill_runs_inside_react_loop(tmp_path, monkeypatch):
     import core.skill_loader as skill_loader
 
@@ -101,4 +170,3 @@ def test_two_stage_skill_runs_inside_react_loop(tmp_path, monkeypatch):
     assert "Safe Echo" in tool_messages[0].content
     assert "skill-ok" in tool_messages[1].content
     assert result["answer"] == "skill completed"
-
