@@ -256,3 +256,25 @@ P1 系统:
 | Notes | `~/.myclaw/notes/<note-id>.json` |
 | User Profile | `~/.myclaw/profile.md` |
 | Workspace Files | `workspace/office/` (沙盒) |
+
+## Skill Frontmatter Metadata
+
+Dynamic skills live under `workspace/office/skills/<skill-name>/SKILL.md`.
+LightClaw reads the frontmatter block, exposes the skill as one lazy tool, and loads the manual only when the model calls the skill with `mode="help"`.
+
+Supported fields:
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `name` | string | folder name | Tool-safe skill name. |
+| `description` | string | generated fallback | Short summary shown in the tool list. |
+| `trigger` | string | empty | When the agent should consider this skill. |
+| `do-not-trigger` | string | empty | When the agent should avoid this skill. |
+| `user-invocable` | boolean | `true` | Whether users can explicitly request this skill. |
+| `disable-auto-invoke` | boolean | `false` | Whether the agent should avoid automatic invocation. |
+| `argument-hint` | string | empty | Short usage hint for user-facing skill lists. |
+| `allowed-tools` | list | empty | Optional allow-list for the skill run backend. Empty means no extra restriction. |
+| `blocked-tools` | list | empty | Optional deny-list for the skill run backend. |
+| `tags` | list | empty | UI and routing labels. |
+
+`allowed-tools` and `blocked-tools` are restrictions, not permission grants. In the current runtime, `mode="run"` can only use `execute_office_shell`, and that command still runs inside the office sandbox.
