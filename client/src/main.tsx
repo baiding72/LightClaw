@@ -92,6 +92,17 @@ type ToolSummary = {
   action: string;
   risk: string;
   requires_consent: boolean;
+  skill_metadata?: {
+    raw_name?: string;
+    trigger?: string;
+    do_not_trigger?: string;
+    user_invocable?: boolean;
+    disable_auto_invoke?: boolean;
+    allowed_tools?: string[];
+    blocked_tools?: string[];
+    argument_hint?: string;
+    tags?: string[];
+  };
 };
 
 type WorkspaceFileEntry = {
@@ -1517,6 +1528,12 @@ function App() {
                       <span>{tool.permission}</span>
                       <span>{tool.requires_consent ? "requires consent" : "auto allowed"}</span>
                     </div>
+                    {tool.skill_metadata ? (
+                      <div className="tool-meta-row">
+                        <span>{tool.skill_metadata.user_invocable === false ? "not user-invocable" : "user-invocable"}</span>
+                        <span>{tool.skill_metadata.tags?.length ? tool.skill_metadata.tags.join(", ") : "skill"}</span>
+                      </div>
+                    ) : null}
                     <div className="param-list">
                       {parameters.length > 0 ? (
                         parameters.map(([name, schema]) => (

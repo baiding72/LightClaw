@@ -367,7 +367,8 @@ for tool in ALL_TOOLS:
     schema = tool.get_schema()
     permission = tool_permission_for(schema.get("name", ""))
     params = schema.get("parameters", {})
-    items.append({
+    metadata = getattr(tool, "skill_metadata", None)
+    item = {
         "name": schema.get("name", ""),
         "description": schema.get("description", ""),
         "parameters": params.get("properties", {}),
@@ -377,7 +378,10 @@ for tool in ALL_TOOLS:
         "action": permission.action,
         "risk": permission.risk,
         "requires_consent": permission.requires_consent,
-    })
+    }
+    if metadata:
+        item["skill_metadata"] = metadata
+    items.append(item)
 print(json.dumps(items, ensure_ascii=False))
 "#;
     let output = Command::new(python_command())
