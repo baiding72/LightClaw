@@ -228,6 +228,23 @@ allowed-tools:
     assert "execute_office_shell" in result
 
 
+def test_skill_registry_lists_manifests_and_gets_by_name(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    skills_dir = tmp_path / "office" / "skills"
+    _write_skill(skills_dir, folder="one", name="one")
+    _write_skill(skills_dir, folder="two", name="two")
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", skills_dir)
+
+    registry = skill_loader.SkillRegistry(skills_dir=skills_dir)
+
+    manifests = registry.list_manifests(force_rescan=True)
+
+    assert [manifest.name for manifest in manifests] == ["one", "two"]
+    assert registry.get_manifest("one").raw_name == "one"
+    assert registry.get_manifest("missing") is None
+
+
 def test_two_stage_skill_runs_inside_react_loop(tmp_path, monkeypatch):
     import core.skill_loader as skill_loader
 

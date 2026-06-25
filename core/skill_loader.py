@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import fnmatch
 from functools import lru_cache
 import re
@@ -50,35 +51,78 @@ def _format_metadata_summary(skill_info: dict[str, Any]) -> str:
     return "Metadata:\n" + "\n".join(rows)
 
 
-class LazySkillLoader:
-    """Scan skill metadata eagerly, load full manuals only on `mode='help'`."""
+@dataclass(frozen=True)
+class SkillManifest:
+    folder: str
+    md_path: str
+    mtime: float
+    raw_name: str
+    name: str
+    description: str
+    trigger: str = ""
+    do_not_trigger: str = ""
+    user_invocable: bool = True
+    disable_auto_invoke: bool = False
+    allowed_tools: list[str] = field(default_factory=list)
+    blocked_tools: list[str] = field(default_factory=list)
+    argument_hint: str = ""
+    tags: list[str] = field(default_factory=list)
 
-    def __init__(self, cache_size: int = 50, scan_interval: int = 60) -> None:
-        self._skill_registry: list[dict[str, Any]] | None = None
+    def metadata(self) -> dict[str, Any]:
+        return {
+            "raw_name": self.raw_name,
+            "trigger": self.trigger,
+            "do_not_trigger": self.do_not_trigger,
+            "user_invocable": self.user_invocable,
+            "disable_auto_invoke": self.disable_auto_invoke,
+            "allowed_tools": list(self.allowed_tools),
+            "blocked_tools": list(self.blocked_tools),
+            "argument_hint": self.argument_hint,
+            "tags": list(self.tags),
+        }
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "folder": self.folder,
+            "md_path": self.md_path,
+            "mtime": self.mtime,
+            "raw_name": self.raw_name,
+            "name": self.name,
+            "description": self.description,
+            **self.metadata(),
+        }
+
+
+class SkillRegistry:
+    """Scan skill metadata and cache parsed manifests."""
+
+    def __init__(self, skills_dir: Path | None = None, scan_interval: int = 60) -> None:
+        self._skills_dir = skills_dir
+        self._manifests: list[SkillManifest] | None = None
         self._last_scan_time = 0.0
         self._scan_interval = scan_interval
-        self._cache_size = cache_size
 
-    @lru_cache(maxsize=50)
-    def _load_skill_content(self, md_path: str, mtime: float) -> str:
-        return Path(md_path).read_text(encoding="utf-8", errors="replace")
+    @property
+    def skills_dir(self) -> Path:
+        return self._skills_dir or SKILLS_DIR
 
-    def _scan_skills(self, force_rescan: bool = False) -> list[dict[str, Any]]:
+    def list_manifests(self, force_rescan: bool = False) -> list[SkillManifest]:
         now = time.time()
         if (
             not force_rescan
-            and self._skill_registry is not None
+            and self._manifests is not None
             and now - self._last_scan_time < self._scan_interval
         ):
-            return self._skill_registry
+            return self._manifests
 
-        skills: list[dict[str, Any]] = []
-        if not SKILLS_DIR.exists():
-            self._skill_registry = []
+        manifests: list[SkillManifest] = []
+        skills_dir = self.skills_dir
+        if not skills_dir.exists():
+            self._manifests = []
             self._last_scan_time = now
             return []
 
-        for folder in sorted(SKILLS_DIR.iterdir(), key=lambda path: path.name.lower()):
+        for folder in sorted(skills_dir.iterdir(), key=lambda path: path.name.lower()):
             if not folder.is_dir():
                 continue
             md_path = folder / "SKILL.md"
@@ -89,18 +133,32 @@ class LazySkillLoader:
             metadata = self._extract_metadata(md_path)
             if not metadata:
                 continue
-            skills.append(
-                {
-                    "folder": folder.name,
-                    "md_path": str(md_path),
-                    "mtime": md_path.stat().st_mtime,
+            manifests.append(
+                SkillManifest(
+                    folder=folder.name,
+                    md_path=str(md_path),
+                    mtime=md_path.stat().st_mtime,
                     **metadata,
-                }
+                )
             )
 
-        self._skill_registry = skills
+        self._manifests = manifests
         self._last_scan_time = now
-        return skills
+        return manifests
+
+    def get_manifest(self, name: str) -> SkillManifest | None:
+        for manifest in self.list_manifests():
+            if manifest.name == name:
+                return manifest
+        return None
+
+    def reload(self) -> list[SkillManifest]:
+        self.clear_cache()
+        return self.list_manifests(force_rescan=True)
+
+    def clear_cache(self) -> None:
+        self._manifests = None
+        self._last_scan_time = 0.0
 
     def _extract_metadata(self, md_path: Path) -> dict[str, Any] | None:
         try:
@@ -159,7 +217,21 @@ class LazySkillLoader:
             "tags": _parse_list(fields.get("tags")),
         }
 
-    def _create_lazy_tool(self, skill_info: dict[str, Any]) -> FunctionTool:
+
+class LazySkillLoader:
+    """Expose skill manifests as lazy tools that load manuals on `mode='help'`."""
+
+    def __init__(self, cache_size: int = 50, scan_interval: int = 60, registry: SkillRegistry | None = None) -> None:
+        self.registry = registry or SkillRegistry(scan_interval=scan_interval)
+        self._cache_size = cache_size
+
+    @lru_cache(maxsize=50)
+    def _load_skill_content(self, md_path: str, mtime: float) -> str:
+        return Path(md_path).read_text(encoding="utf-8", errors="replace")
+
+    def _create_lazy_tool(self, manifest: SkillManifest) -> FunctionTool:
+        skill_info = manifest.as_dict()
+
         def lazy_runner(mode: str, command: str = "") -> str:
             normalized_mode = (mode or "").strip().lower()
             if normalized_mode == "help":
@@ -217,32 +289,18 @@ class LazySkillLoader:
             description=description,
             parameters=parameters,
         )
-        tool.skill_metadata = {
-            key: skill_info[key]
-            for key in [
-                "raw_name",
-                "trigger",
-                "do_not_trigger",
-                "user_invocable",
-                "disable_auto_invoke",
-                "allowed_tools",
-                "blocked_tools",
-                "argument_hint",
-                "tags",
-            ]
-        }
+        tool.skill_metadata = manifest.metadata()
         return tool
 
     def get_all_tools(self, force_rescan: bool = False) -> list[FunctionTool]:
-        return [self._create_lazy_tool(info) for info in self._scan_skills(force_rescan=force_rescan)]
+        return [self._create_lazy_tool(manifest) for manifest in self.registry.list_manifests(force_rescan=force_rescan)]
 
     def get_tool_count(self) -> int:
-        return len(self._scan_skills())
+        return len(self.registry.list_manifests())
 
     def clear_cache(self) -> None:
         self._load_skill_content.cache_clear()
-        self._skill_registry = None
-        self._last_scan_time = 0.0
+        self.registry.clear_cache()
 
 
 _lazy_loader = LazySkillLoader()
