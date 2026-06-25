@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from core.config import SKILLS_DIR
+from core.config import BUILTIN_SKILLS_DIR, SKILLS_DIR
 from core.tools.base import FunctionTool
 from core.tools.shell import execute_office_shell
 
@@ -56,6 +56,8 @@ class SkillManifest:
     folder: str
     md_path: str
     mtime: float
+    source: str
+    base_dir: str
     raw_name: str
     name: str
     description: str
@@ -71,6 +73,8 @@ class SkillManifest:
     def metadata(self) -> dict[str, Any]:
         return {
             "raw_name": self.raw_name,
+            "source": self.source,
+            "base_dir": self.base_dir,
             "trigger": self.trigger,
             "do_not_trigger": self.do_not_trigger,
             "user_invocable": self.user_invocable,
@@ -86,6 +90,8 @@ class SkillManifest:
             "folder": self.folder,
             "md_path": self.md_path,
             "mtime": self.mtime,
+            "source": self.source,
+            "base_dir": self.base_dir,
             "raw_name": self.raw_name,
             "name": self.name,
             "description": self.description,
@@ -96,8 +102,14 @@ class SkillManifest:
 class SkillRegistry:
     """Scan skill metadata and cache parsed manifests."""
 
-    def __init__(self, skills_dir: Path | None = None, scan_interval: int = 60) -> None:
+    def __init__(
+        self,
+        skills_dir: Path | None = None,
+        skills_dirs: list[Path] | None = None,
+        scan_interval: int = 60,
+    ) -> None:
         self._skills_dir = skills_dir
+        self._skills_dirs = skills_dirs
         self._manifests: list[SkillManifest] | None = None
         self._last_scan_time = 0.0
         self._scan_interval = scan_interval
@@ -105,6 +117,13 @@ class SkillRegistry:
     @property
     def skills_dir(self) -> Path:
         return self._skills_dir or SKILLS_DIR
+
+    def skill_roots(self) -> list[tuple[Path, str]]:
+        if self._skills_dirs is not None:
+            return [(path, path.name or "custom") for path in self._skills_dirs]
+        if self._skills_dir is not None:
+            return [(self._skills_dir, "custom")]
+        return [(BUILTIN_SKILLS_DIR, "builtin"), (SKILLS_DIR, "workspace")]
 
     def list_manifests(self, force_rescan: bool = False) -> list[SkillManifest]:
         now = time.time()
@@ -115,33 +134,33 @@ class SkillRegistry:
         ):
             return self._manifests
 
-        manifests: list[SkillManifest] = []
-        skills_dir = self.skills_dir
-        if not skills_dir.exists():
-            self._manifests = []
-            self._last_scan_time = now
-            return []
+        manifests_by_name: dict[str, SkillManifest] = {}
 
-        for folder in sorted(skills_dir.iterdir(), key=lambda path: path.name.lower()):
-            if not folder.is_dir():
+        for skills_dir, source in self.skill_roots():
+            if not skills_dir.exists():
                 continue
-            md_path = folder / "SKILL.md"
-            if not md_path.exists():
-                md_path = folder / "README.md"
-            if not md_path.exists():
-                continue
-            metadata = self._extract_metadata(md_path)
-            if not metadata:
-                continue
-            manifests.append(
-                SkillManifest(
+            for folder in sorted(skills_dir.iterdir(), key=lambda path: path.name.lower()):
+                if not folder.is_dir():
+                    continue
+                md_path = folder / "SKILL.md"
+                if not md_path.exists():
+                    md_path = folder / "README.md"
+                if not md_path.exists():
+                    continue
+                metadata = self._extract_metadata(md_path)
+                if not metadata:
+                    continue
+                manifest = SkillManifest(
                     folder=folder.name,
                     md_path=str(md_path),
                     mtime=md_path.stat().st_mtime,
+                    source=source,
+                    base_dir=str(folder),
                     **metadata,
                 )
-            )
+                manifests_by_name[manifest.name] = manifest
 
+        manifests = sorted(manifests_by_name.values(), key=lambda manifest: manifest.name.lower())
         self._manifests = manifests
         self._last_scan_time = now
         return manifests
@@ -255,7 +274,8 @@ class LazySkillLoader:
                     return f"Error: this skill blocks {run_backend} via blocked-tools."
                 if allowed_tools and not _matches_tool_pattern(allowed_tools, run_backend):
                     return f"Error: this skill allowed-tools does not include {run_backend}."
-                actual_cmd = command.replace("{baseDir}", f"skills/{skill_info['folder']}")
+                base_dir = str(skill_info.get("base_dir") or f"skills/{skill_info['folder']}")
+                actual_cmd = command.replace("{baseDir}", base_dir)
                 return execute_office_shell.invoke({"command": actual_cmd})
             return "Error: mode must be 'help' or 'run'."
 

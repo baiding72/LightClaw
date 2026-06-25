@@ -16,6 +16,7 @@ import {
   Save,
   Search,
   Settings,
+  ShieldCheck,
   TerminalSquare,
   Wrench,
   XCircle,
@@ -94,6 +95,8 @@ type ToolSummary = {
   requires_consent: boolean;
   skill_metadata?: {
     raw_name?: string;
+    source?: string;
+    base_dir?: string;
     trigger?: string;
     do_not_trigger?: string;
     user_invocable?: boolean;
@@ -1045,7 +1048,7 @@ function App() {
 
   useEffect(() => {
     if (!selectedRun) return;
-    if (activeView === "tools" || activeView === "files") return;
+    if (activeView === "tools" || activeView === "skills" || activeView === "permissions" || activeView === "files") return;
     invokeCommand<TraceEvent[]>("read_run", { path: selectedRun.path })
       .then((nextEvents) => {
         setEvents(nextEvents);
@@ -1057,15 +1060,15 @@ function App() {
   }, [activeView, selectedRun]);
 
   useEffect(() => {
-    if (activeView !== "tools" && activeView !== "files") return;
+    if (activeView !== "tools" && activeView !== "skills" && activeView !== "permissions" && activeView !== "files") return;
     setResourceLoading(true);
-    const command = activeView === "tools" ? "list_agent_tools" : "list_workspace_files";
+    const command = activeView === "files" ? "list_workspace_files" : "list_agent_tools";
     invokeCommand<ToolSummary[] | WorkspaceFileEntry[]>(command)
       .then((items) => {
-        if (activeView === "tools") {
-          setAgentTools(items as ToolSummary[]);
-        } else {
+        if (activeView === "files") {
           setWorkspaceFiles(items as WorkspaceFileEntry[]);
+        } else {
+          setAgentTools(items as ToolSummary[]);
         }
         setErrorMessage("");
       })
@@ -1080,7 +1083,7 @@ function App() {
     if (activeView === "evals") {
       return runs.filter((run) => run.run_type === "interactive" || run.run_type === "eval");
     }
-    if (activeView === "tools" || activeView === "files") {
+    if (activeView === "tools" || activeView === "skills" || activeView === "permissions" || activeView === "files") {
       return [];
     }
     return runs;
@@ -1092,6 +1095,21 @@ function App() {
     return visibleRuns.filter((run) => `${run.title} ${run.model ?? ""} ${run.id}`.toLowerCase().includes(text));
   }, [visibleRuns, query]);
   const evalRunGroups = useMemo(() => groupEvalRuns(filteredRuns), [filteredRuns]);
+  const skillTools = useMemo(() => agentTools.filter((tool) => tool.skill_metadata), [agentTools]);
+  const regularTools = useMemo(() => agentTools.filter((tool) => !tool.skill_metadata), [agentTools]);
+  const permissionGroups = useMemo(() => {
+    const groups = new Map<string, ToolSummary[]>();
+    for (const tool of agentTools) {
+      const key = `${tool.resource}:${tool.risk}`;
+      groups.set(key, [...(groups.get(key) ?? []), tool]);
+    }
+    return Array.from(groups.entries())
+      .map(([key, tools]) => {
+        const [resource, risk] = key.split(":");
+        return { key, resource, risk, tools: tools.sort((a, b) => a.name.localeCompare(b.name)) };
+      })
+      .sort((a, b) => `${a.resource}:${a.risk}`.localeCompare(`${b.resource}:${b.risk}`));
+  }, [agentTools]);
   const visibleWorkspaceFiles = useMemo(() => {
     const collapsedDirs = Object.entries(collapsedFileDirs)
       .filter(([, collapsed]) => collapsed)
@@ -1392,6 +1410,8 @@ function App() {
         <RailButton icon={<Activity size={21} />} label="Trace" active={activeView === "trace"} onClick={() => setActiveView("trace")} />
         <RailButton icon={<Bug size={21} />} label="评测" active={activeView === "evals"} onClick={() => setActiveView("evals")} />
         <RailButton icon={<Wrench size={21} />} label="工具" active={activeView === "tools"} onClick={() => setActiveView("tools")} />
+        <RailButton icon={<Bot size={21} />} label="技能" active={activeView === "skills"} onClick={() => setActiveView("skills")} />
+        <RailButton icon={<ShieldCheck size={21} />} label="权限" active={activeView === "permissions"} onClick={() => setActiveView("permissions")} />
         <RailButton icon={<Folder size={21} />} label="文件" active={activeView === "files"} onClick={() => setActiveView("files")} />
         <div className="rail-spacer" />
         <RailButton icon={<Settings size={21} />} label="设置" active={settingsOpen} onClick={() => setSettingsOpen(true)} />
@@ -1413,19 +1433,19 @@ function App() {
             {hasBlankInteractiveSession ? "空白会话已就绪" : isCreatingSession ? "创建中" : "新建空白会话"}
           </button>
         ) : null}
-        {(activeView === "tools" || activeView === "files") ? (
+        {(activeView === "tools" || activeView === "skills" || activeView === "permissions" || activeView === "files") ? (
           <button
             className="primary-outline"
             onClick={() => {
               setResourceLoading(true);
               invokeCommand<ToolSummary[] | WorkspaceFileEntry[]>(
-                activeView === "tools" ? "list_agent_tools" : "list_workspace_files",
+                activeView === "files" ? "list_workspace_files" : "list_agent_tools",
               )
                 .then((items) => {
-                  if (activeView === "tools") {
-                    setAgentTools(items as ToolSummary[]);
-                  } else {
+                  if (activeView === "files") {
                     setWorkspaceFiles(items as WorkspaceFileEntry[]);
+                  } else {
+                    setAgentTools(items as ToolSummary[]);
                   }
                   setErrorMessage("");
                 })
@@ -1445,6 +1465,10 @@ function App() {
               ? "Eval Runs & Sessions"
               : activeView === "tools"
                 ? "Tool Registry"
+                : activeView === "skills"
+                  ? "Skill Library"
+                  : activeView === "permissions"
+                    ? "Permission Center"
                 : activeView === "files"
                   ? "Workspace"
                   : "Traces"}
@@ -1453,6 +1477,16 @@ function App() {
           <div className="side-summary">
             <strong>{agentTools.length}</strong>
             <span>当前 agent 可用工具</span>
+          </div>
+        ) : activeView === "skills" ? (
+          <div className="side-summary">
+            <strong>{skillTools.length}</strong>
+            <span>内置与工作区 skill</span>
+          </div>
+        ) : activeView === "permissions" ? (
+          <div className="side-summary">
+            <strong>{agentTools.filter((tool) => tool.requires_consent).length}</strong>
+            <span>需要确认的工具</span>
           </div>
         ) : activeView === "files" ? (
           <div className="side-summary">
@@ -1508,6 +1542,7 @@ function App() {
             subtitle="来自 myClaw.core.tools.ALL_TOOLS，并附带权限系统映射。"
             metrics={[
               ["Tools", agentTools.length],
+              ["Skills", skillTools.length],
               ["Consent", agentTools.filter((tool) => tool.requires_consent).length],
               ["Resources", new Set(agentTools.map((tool) => tool.resource)).size],
             ]}
@@ -1548,6 +1583,84 @@ function App() {
                   </div>
                 );
               })}
+            </div>
+          </ResourceView>
+        ) : activeView === "skills" ? (
+          <ResourceView
+            title="技能库"
+            subtitle="来自 skills/builtin 和 workspace/office/skills；同名时工作区 skill 覆盖内置版本。"
+            metrics={[
+              ["Skills", skillTools.length],
+              ["Builtin", skillTools.filter((tool) => tool.skill_metadata?.source === "builtin").length],
+              ["Workspace", skillTools.filter((tool) => tool.skill_metadata?.source === "workspace").length],
+            ]}
+          >
+            <div className="tool-grid">
+              {skillTools.map((tool) => (
+                <div className="tool-card" key={tool.name}>
+                  <div className="tool-card-head">
+                    <div>
+                      <h3>{tool.skill_metadata?.raw_name ?? tool.name}</h3>
+                      <p>{tool.description || "No description"}</p>
+                    </div>
+                    <span className="risk-pill">{tool.skill_metadata?.source ?? "skill"}</span>
+                  </div>
+                  <div className="tool-meta-row">
+                    <span>{tool.skill_metadata?.user_invocable === false ? "not user-invocable" : "user-invocable"}</span>
+                    <span>{tool.skill_metadata?.disable_auto_invoke ? "manual only" : "auto triggerable"}</span>
+                  </div>
+                  {tool.skill_metadata?.trigger ? (
+                    <p className="skill-detail"><strong>触发：</strong>{tool.skill_metadata.trigger}</p>
+                  ) : null}
+                  {tool.skill_metadata?.do_not_trigger ? (
+                    <p className="skill-detail"><strong>不触发：</strong>{tool.skill_metadata.do_not_trigger}</p>
+                  ) : null}
+                  <div className="param-list">
+                    {(tool.skill_metadata?.tags?.length ? tool.skill_metadata.tags : ["skill"]).map((tag) => (
+                      <span key={tag}>{tag}</span>
+                    ))}
+                  </div>
+                  <div className="tool-meta-row">
+                    <span>blocked: {tool.skill_metadata?.blocked_tools?.length ? tool.skill_metadata.blocked_tools.join(", ") : "none"}</span>
+                    <span>allowed: {tool.skill_metadata?.allowed_tools?.length ? tool.skill_metadata.allowed_tools.join(", ") : "default"}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ResourceView>
+        ) : activeView === "permissions" ? (
+          <ResourceView
+            title="权限中心"
+            subtitle="按资源、风险和确认需求审查当前 agent 的工具权限。"
+            metrics={[
+              ["Tools", agentTools.length],
+              ["Regular", regularTools.length],
+              ["Consent", agentTools.filter((tool) => tool.requires_consent).length],
+            ]}
+          >
+            <div className="permission-groups">
+              {permissionGroups.map((group) => (
+                <section className="permission-group" key={group.key}>
+                  <div className="permission-group-head">
+                    <div>
+                      <h3>{group.resource}</h3>
+                      <p>{group.tools.length} tools · {group.tools.filter((tool) => tool.requires_consent).length} require consent</p>
+                    </div>
+                    <span className={`risk-pill ${group.risk}`}>{group.risk}</span>
+                  </div>
+                  <div className="permission-tool-list">
+                    {group.tools.map((tool) => (
+                      <div className="permission-tool-row" key={tool.name}>
+                        <div>
+                          <strong>{tool.name}</strong>
+                          <span>{tool.permission}</span>
+                        </div>
+                        <span>{tool.requires_consent ? "确认" : "自动"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
             </div>
           </ResourceView>
         ) : activeView === "files" ? (

@@ -259,8 +259,14 @@ P1 系统:
 
 ## Skill Frontmatter Metadata
 
-Dynamic skills live under `workspace/office/skills/<skill-name>/SKILL.md`.
-LightClaw reads the frontmatter block, exposes the skill as one lazy tool, and loads the manual only when the model calls the skill with `mode="help"`.
+Dynamic skills are loaded from two roots:
+
+| Root | Purpose | Override behavior |
+| --- | --- | --- |
+| `skills/builtin/<skill-name>/SKILL.md` | Versioned built-in skills shipped with LightClaw. | Lower priority. |
+| `workspace/office/skills/<skill-name>/SKILL.md` | User-editable workspace skills. | Overrides a built-in skill with the same `name`. |
+
+LightClaw reads the frontmatter block, exposes each skill as one lazy tool, and loads the manual only when the model calls the skill with `mode="help"`.
 
 Supported fields:
 
@@ -278,3 +284,21 @@ Supported fields:
 | `tags` | list | empty | UI and routing labels. |
 
 `allowed-tools` and `blocked-tools` are restrictions, not permission grants. In the current runtime, `mode="run"` can only use `execute_office_shell`, and that command still runs inside the office sandbox.
+
+### Built-in Skill Seed Set
+
+The first built-in migration intentionally includes Abu skills that are mostly instruction-driven and do not require Abu-only tools:
+
+- `doc-coauthoring`
+- `internal-comms`
+- `reflect`
+- `mermaid-diagram`
+- `svg-diagram`
+- `infographic`
+- `html-widget`
+- `alert-sop`
+- `skill-creator`
+
+These built-ins all block `execute_office_shell` initially, so they can be used to test routing, `mode="help"` loading, context boundaries, and UI visibility without expanding execution permissions.
+
+Deferred Abu skills include browser automation, schedule/trigger, create-agent, document converters, and other skills that depend on Abu-specific tool APIs. Those should be migrated only after LightClaw has equivalent tools and permission scopes.

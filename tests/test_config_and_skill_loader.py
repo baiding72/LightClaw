@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolate_builtin_skills(monkeypatch, tmp_path):
+    import core.skill_loader as skill_loader
+
+    monkeypatch.setattr(skill_loader, "BUILTIN_SKILLS_DIR", tmp_path / "missing_builtin")
+    skill_loader.clear_skill_cache()
+
 
 def test_config_paths_exist_and_are_path_objects():
     from pathlib import Path
@@ -9,6 +19,7 @@ def test_config_paths_exist_and_are_path_objects():
     from core.config import (
         APPROVALS_DIR,
         CONFIG_DIR,
+        BUILTIN_SKILLS_DIR,
         MEMORY_DIR,
         MYCLAW_DIR,
         OFFICE_DIR,
@@ -19,11 +30,12 @@ def test_config_paths_exist_and_are_path_objects():
         WORKSPACE_DIR,
     )
 
-    for path in [PROJECT_ROOT, MYCLAW_DIR, WORKSPACE_DIR, OFFICE_DIR, SKILLS_DIR, MEMORY_DIR, CONFIG_DIR, RUNTIME_DIR, APPROVALS_DIR, TASKS_FILE]:
+    for path in [PROJECT_ROOT, MYCLAW_DIR, WORKSPACE_DIR, OFFICE_DIR, SKILLS_DIR, BUILTIN_SKILLS_DIR, MEMORY_DIR, CONFIG_DIR, RUNTIME_DIR, APPROVALS_DIR, TASKS_FILE]:
         assert isinstance(path, Path)
 
     assert OFFICE_DIR.exists()
     assert SKILLS_DIR.exists()
+    assert BUILTIN_SKILLS_DIR.exists()
 
 
 def test_skill_loader_imports():
@@ -55,4 +67,3 @@ def test_load_dynamic_skills_empty_directory_returns_empty(tmp_path, monkeypatch
 
     assert skill_loader.load_dynamic_skills(force_rescan=True) == []
     assert skill_loader.get_skill_count() == 0
-

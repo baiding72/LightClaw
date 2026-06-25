@@ -4,11 +4,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from langchain_core.messages import AIMessage
 
 from core.agent import create_agent_harness
 from core.policy import ToolPolicy
 from tests.test_mvp_learning import QueueChatModel
+
+
+@pytest.fixture(autouse=True)
+def isolate_builtin_skills(monkeypatch, tmp_path):
+    import core.skill_loader as skill_loader
+
+    monkeypatch.setattr(skill_loader, "BUILTIN_SKILLS_DIR", tmp_path / "missing_builtin")
+    skill_loader.clear_skill_cache()
 
 
 def _write_skill(root: Path, folder: str = "safe_echo", name: str = "safe_echo") -> Path:
@@ -244,6 +253,39 @@ def test_skill_registry_lists_manifests_and_gets_by_name(tmp_path, monkeypatch):
     assert [manifest.name for manifest in manifests] == ["one", "two"]
     assert registry.get_manifest("one").raw_name == "one"
     assert registry.get_manifest("missing") is None
+
+
+def test_skill_registry_scans_builtin_and_workspace_with_workspace_override(tmp_path):
+    import core.skill_loader as skill_loader
+
+    builtin_dir = tmp_path / "skills" / "builtin"
+    workspace_dir = tmp_path / "workspace" / "office" / "skills"
+    _write_skill(builtin_dir, folder="shared", name="shared")
+    _write_skill(builtin_dir, folder="builtin_only", name="builtin_only")
+    _write_skill(workspace_dir, folder="shared", name="shared")
+
+    registry = skill_loader.SkillRegistry(skills_dirs=[builtin_dir, workspace_dir])
+    manifests = registry.list_manifests(force_rescan=True)
+
+    assert [manifest.name for manifest in manifests] == ["builtin_only", "shared"]
+    shared = registry.get_manifest("shared")
+    assert shared is not None
+    assert shared.source == workspace_dir.name
+    assert shared.base_dir.endswith("workspace/office/skills/shared")
+
+
+def test_lazy_skill_metadata_includes_source_and_base_dir(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    skills_dir = tmp_path / "office" / "skills"
+    _write_skill(skills_dir, folder="source_demo", name="source_demo")
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", skills_dir)
+    skill_loader.clear_skill_cache()
+
+    [tool] = skill_loader.load_dynamic_skills(force_rescan=True)
+
+    assert tool.skill_metadata["source"] == "workspace"
+    assert tool.skill_metadata["base_dir"].endswith("office/skills/source_demo")
 
 
 def test_two_stage_skill_runs_inside_react_loop(tmp_path, monkeypatch):

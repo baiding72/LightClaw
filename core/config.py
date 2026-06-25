@@ -12,6 +12,7 @@ MYCLAW_DIR = PROJECT_ROOT
 WORKSPACE_DIR = MYCLAW_DIR / "workspace"
 OFFICE_DIR = WORKSPACE_DIR / "office"
 SKILLS_DIR = OFFICE_DIR / "skills"
+BUILTIN_SKILLS_DIR = MYCLAW_DIR / "skills" / "builtin"
 MEMORY_DIR = WORKSPACE_DIR / "memory"
 TASKS_DIR = Path.home() / ".myclaw" / "tasks"
 TASKS_FILE = TASKS_DIR / "tasks.json"
@@ -21,7 +22,7 @@ RUNTIME_DIR = MYCLAW_DIR / "runtime"
 APPROVALS_DIR = RUNTIME_DIR / "approvals"
 
 
-for directory in [WORKSPACE_DIR, OFFICE_DIR, SKILLS_DIR, MEMORY_DIR, CONFIG_DIR, RUNTIME_DIR, APPROVALS_DIR]:
+for directory in [WORKSPACE_DIR, OFFICE_DIR, SKILLS_DIR, BUILTIN_SKILLS_DIR, MEMORY_DIR, CONFIG_DIR, RUNTIME_DIR, APPROVALS_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
 

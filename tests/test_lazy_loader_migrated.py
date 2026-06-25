@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from core import skill_loader as skill_loader_module
+
+
+@pytest.fixture(autouse=True)
+def isolate_builtin_skills(monkeypatch, tmp_path):
+    monkeypatch.setattr(skill_loader_module, "BUILTIN_SKILLS_DIR", tmp_path / "missing_builtin")
+    skill_loader_module.clear_skill_cache()
 
 
 def _create_skill(root: Path, folder: str, name: str, description: str, body: str = "") -> None:

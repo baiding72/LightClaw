@@ -462,6 +462,14 @@ body.is-resizing-layout .resize-handle::after {
   line-height: 1.45;
 }
 
+.skill-detail {
+  color: #b8b2a8;
+}
+
+.skill-detail strong {
+  color: #e8e0d2;
+}
+
 .risk-pill {
   flex: 0 0 auto;
   padding: 4px 8px;
@@ -506,6 +514,69 @@ body.is-resizing-layout .resize-handle::after {
   color: #111;
   background: #d7f264;
   border-color: #d7f264;
+}
+
+.permission-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+}
+
+.permission-group {
+  min-width: 0;
+  padding: 14px;
+  background: #242321;
+  border: 1px solid #34322e;
+  border-radius: 8px;
+}
+
+.permission-group-head,
+.permission-tool-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.permission-group h3 {
+  margin: 0;
+  color: #f0ece3;
+  font-size: 16px;
+}
+
+.permission-group p {
+  margin: 6px 0 0;
+  color: #98938a;
+  font-size: 13px;
+}
+
+.permission-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.permission-tool-row {
+  padding: 9px;
+  background: #191918;
+  border: 1px solid #2f2d29;
+  border-radius: 7px;
+}
+
+.permission-tool-row div {
+  min-width: 0;
+}
+
+.permission-tool-row strong,
+.permission-tool-row span {
+  display: block;
+  color: #d8d2c6;
+  font-size: 12px;
+}
+
+.permission-tool-row span {
+  color: #918c82;
 }
 
 .file-tree {
