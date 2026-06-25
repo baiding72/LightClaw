@@ -1,4 +1,4 @@
 {
   "approval_timeout_seconds": 300,
-  "mode": "monitor"
+  "mode": "off"
 }

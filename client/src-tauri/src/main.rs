@@ -457,6 +457,16 @@ fn get_policy_config() -> Result<Value, String> {
     if !value.is_object() {
         value = default;
     }
+    if let Some(mode) = value.get("mode").and_then(Value::as_str) {
+        let normalized = match mode {
+            "monitor" => "auto",
+            "enforce" | "ask" => "default",
+            "read_only" => "plan",
+            "off" | "default" | "plan" | "auto" => mode,
+            _ => "off",
+        };
+        value["mode"] = Value::String(normalized.to_string());
+    }
     Ok(value)
 }
 
@@ -467,7 +477,13 @@ fn set_policy_config(config: Value) -> Result<Value, String> {
         .and_then(Value::as_str)
         .unwrap_or("off")
         .to_string();
-    if !matches!(mode.as_str(), "off" | "monitor" | "enforce") {
+    mode = match mode.as_str() {
+        "monitor" => "auto".to_string(),
+        "enforce" | "ask" => "default".to_string(),
+        "read_only" => "plan".to_string(),
+        _ => mode,
+    };
+    if !matches!(mode.as_str(), "off" | "default" | "plan" | "auto") {
         mode = "off".to_string();
     }
     let timeout = config

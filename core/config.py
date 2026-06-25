@@ -48,7 +48,13 @@ def save_policy_config(config: dict[str, Any]) -> dict[str, Any]:
     next_config = dict(DEFAULT_POLICY_CONFIG)
     next_config.update(config)
     mode = str(next_config.get("mode", "off")).lower()
-    if mode not in {"off", "monitor", "enforce"}:
+    mode = {
+        "monitor": "auto",
+        "enforce": "default",
+        "ask": "default",
+        "read_only": "plan",
+    }.get(mode, mode)
+    if mode not in {"off", "default", "plan", "auto"}:
         mode = "off"
     next_config["mode"] = mode
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)

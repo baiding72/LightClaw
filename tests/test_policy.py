@@ -17,15 +17,15 @@ def test_off_policy_allows_without_monitoring_side_effects():
     assert "关闭" in result.reason
 
 
-def test_monitor_policy_records_sensitive_tool_as_allow():
+def test_monitor_alias_records_sensitive_tool_as_auto_ask():
     policy = ToolPolicy(mode="monitor")
 
     result = policy.evaluate(ToolGateContext(tool_name="save_user_profile", args={"new_content": "x"}))
 
-    assert result.decision == ToolGateDecision.ALLOW
+    assert result.decision == ToolGateDecision.ASK
     assert result.permission.key == "memory.profile:write"
     assert result.permission.requires_consent is True
-    assert result.mode == "monitor"
+    assert result.mode == "auto"
 
 
 def test_enforce_policy_asks_for_sensitive_tool_without_grant():
@@ -35,6 +35,7 @@ def test_enforce_policy_asks_for_sensitive_tool_without_grant():
 
     assert result.decision == ToolGateDecision.ASK
     assert result.permission.key == "external.web:search"
+    assert result.mode == "default"
     assert result.metadata["source_route"] in {"local_first", "unclear", "network_candidate"}
 
 
@@ -95,6 +96,44 @@ def test_policy_denies_sensitive_memory_even_when_off():
 
     assert result.decision == ToolGateDecision.DENY
     assert result.metadata["sensitive_memory"] is True
+
+
+def test_default_policy_asks_for_write_tool_by_default():
+    policy = ToolPolicy(mode="default")
+
+    result = policy.evaluate(ToolGateContext(tool_name="write_office_file", args={"relative_path": "note.md", "content": "x"}))
+
+    assert result.decision == ToolGateDecision.ASK
+    assert result.permission.key == "office.file:create"
+
+
+def test_plan_policy_allows_reads_and_denies_writes():
+    policy = ToolPolicy(mode="plan")
+
+    read_result = policy.evaluate(ToolGateContext(tool_name="read_office_file", args={"relative_path": "note.md"}))
+    write_result = policy.evaluate(ToolGateContext(tool_name="write_office_file", args={"relative_path": "note.md", "content": "x"}))
+
+    assert read_result.decision == ToolGateDecision.ALLOW
+    assert write_result.decision == ToolGateDecision.DENY
+    assert "plan 模式" in write_result.reason
+
+
+def test_auto_policy_allows_read_only_tools():
+    policy = ToolPolicy(mode="auto")
+
+    result = policy.evaluate(ToolGateContext(tool_name="read_office_file", args={"relative_path": "note.md"}))
+
+    assert result.decision == ToolGateDecision.ALLOW
+    assert "只读" in result.reason
+
+
+def test_deny_rules_run_before_off_mode_for_dangerous_shell():
+    policy = ToolPolicy(mode="off")
+
+    result = policy.evaluate(ToolGateContext(tool_name="execute_office_shell", args={"command": "sudo whoami"}))
+
+    assert result.decision == ToolGateDecision.DENY
+    assert "危险" in result.reason
 
 
 def test_off_policy_does_not_emit_gate_events_in_agent_loop():

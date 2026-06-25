@@ -109,7 +109,7 @@ type WorkspaceFileContent = {
 };
 
 type PolicyConfig = {
-  mode: "off" | "monitor" | "enforce";
+  mode: "off" | "default" | "plan" | "auto";
   approval_timeout_seconds: number;
 };
 
@@ -1872,18 +1872,18 @@ function App() {
             <div className="setting-block">
               <label>工具权限模式</label>
               <div className="mode-options">
-                {(["off", "monitor", "enforce"] as const).map((mode) => (
+                {(["off", "default", "plan", "auto"] as const).map((mode) => (
                   <button
                     key={mode}
                     className={policyConfig.mode === mode ? "active" : ""}
                     onClick={() => savePolicyConfig({ ...policyConfig, mode })}
                   >
-                    {mode === "off" ? "关闭" : mode === "monitor" ? "只记录" : "强制确认"}
+                    {mode === "off" ? "关闭" : mode === "default" ? "默认" : mode === "plan" ? "计划" : "自动"}
                   </button>
                 ))}
               </div>
               <p>
-                关闭：不写 gate trace，也不拦截。只记录：写入 gate trace 但不拦截。强制确认：高风险工具会弹窗等待允许。
+                默认：未命中规则时询问。计划：只允许读。自动：只读和低风险工具自动放行，中高风险工具仍需确认。
               </p>
             </div>
             <div className="setting-block">

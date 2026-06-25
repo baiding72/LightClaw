@@ -11,7 +11,9 @@
 ```text
 模型决定调用工具
   -> AgentHarness 收到 tool_call
-  -> ToolPolicy 判断资源、动作、风险
+  -> ToolPolicy 先匹配 deny rules
+  -> 根据当前 mode 做全局判断
+  -> 再匹配 allow rules
   -> 得到 allow / ask / deny
   -> 写入 trace
   -> allow 才执行工具
@@ -35,9 +37,9 @@
 - `ask`：需要用户确认。
 - `deny`：不执行工具。
 
-现在 `deny` 主要来自用户拒绝或确认超时；后续可以加入更强的禁止策略，比如路径越权、危险命令、不可逆删除等。
+`deny` 优先于模式和 allow 规则，主要用于路径越权、危险 shell、敏感凭据写入长期记忆、临时信息写入长期记忆，以及用户拒绝或确认超时。
 
-## 三种模式
+## 四种模式
 
 当前配置放在：
 
@@ -56,19 +58,21 @@ myClaw/config/policy.json
 
 模式含义：
 
-- `off`：关闭权限观察和拦截。工具照常执行，不写 `tool_gate_decision`。默认使用这个，避免学习阶段被频繁弹窗和额外 trace 打断。
-- `monitor`：工具照常执行，但会写 `tool_gate_decision`。适合收集 badcase，观察模型会不会乱写记忆、乱联网、乱改文件。
-- `enforce`：会写 `tool_gate_decision`，并且遇到高风险工具时弹窗确认。用户允许后继续执行，拒绝或超时就不执行。
+- `off`：关闭普通权限观察和拦截，但硬安全拒绝仍然生效。
+- `default`：未命中规则时询问用户，适合日常交互。
+- `plan`：只允许读，不允许写入、修改或联网，适合计划、审查、分析。
+- `auto`：只读和低风险工具自动放行，中高风险工具继续询问用户。
 
-所以这三个模式的区别应该是：
+所以核心判断顺序是：
 
 ```text
-off      = 不看、不记、不拦
-monitor  = 看见、记录、不拦
-enforce  = 看见、记录、会拦
+1. deny rules     -> 命中就拒绝
+2. mode check     -> 根据 off/default/plan/auto 判断
+3. allow rules    -> 命中就放行
+4. ask user       -> 剩下的灰区询问用户
 ```
 
-前端设置按钮里可以切换这三个模式。
+旧配置会自动兼容：`monitor` 映射为 `auto`，`enforce` 映射为 `default`。
 
 ## 工具如何映射成权限
 
@@ -105,7 +109,7 @@ read_url              -> external.web:read
 
 ## ask 是怎么等待前端的
 
-`enforce` 模式下，如果一个工具需要确认，后端会发出 `tool_gate_decision` 事件。
+非 `off` 模式下，如果一个工具需要确认，后端会发出 `tool_gate_decision` 事件。
 
 前端收到事件后弹窗，展示：
 
@@ -180,14 +184,14 @@ memory_signals         # 命中的判断信号
 
 这样我们调 badcase 时看到的不只是“模型写了 profile”，还能看到 harness 认为这次写入到底像临时会话、长期画像，还是项目笔记。
 
-如果进入 `enforce` 模式，且出现明显不匹配，比如：
+如果进入非 `off` 模式，且出现明显不匹配，比如：
 
 ```text
 用户说“临时偏好”
 模型却调用 save_user_profile
 ```
 
-系统会倾向于弹窗确认，而不是默默写入长期画像。
+系统会直接拒绝临时信息写入长期画像，而不是默默保存。
 
 ### memory scope 具体怎么判断
 
@@ -212,7 +216,7 @@ memory_signals         # 命中的判断信号
    当前会话临时记一下这个代号。
    ```
 
-   这类信息不应该直接写进长期 profile。哪怕模型调用了 `save_user_profile`，policy 也会认为“这里可能不对”，在 `enforce` 模式下要求确认。
+   这类信息不应该直接写进长期 profile。哪怕模型调用了 `save_user_profile`，policy 也会优先命中 deny 规则并拒绝执行。
 
 2. **再看模型想写的是不是用户画像。**
 
@@ -751,7 +755,7 @@ full       全放开
 这很像我们现在的：
 
 ```text
-off / monitor / enforce
+off / default / plan / auto
 ```
 
 但 OpenClaw 更偏 shell exec 权限；myClaw 现在是所有工具统一 gate。
@@ -913,7 +917,7 @@ update_office_file   只更新已有文件
 - 记录风险。
 - 记录 memory scope 判断。
 - 记录 source routing 判断。
-- 在 enforce 模式下弹窗等待用户确认。
+- 在非 `off` 模式下对灰区和中高风险工具弹窗等待用户确认。
 
 但它还不是最终形态：
 

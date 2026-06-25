@@ -186,7 +186,7 @@ Turn 2: 在当前仓库里找和 context guard 相关的文件，只汇报文件
 Turn 3: 阅读 core/context_guard.py，只总结 protect_state 的触发条件。
 Turn 4: 阅读 core/state.py，只总结 trim_context 的保留策略。
 Turn 5: 阅读 tests/test_context_advanced.py，只总结现有覆盖。
-Turn 6: 阅读 docs/interview_cheatsheet.md 的上下文管理部分，只总结文档说法。
+Turn 6: 阅读 docs/interview_qa.md 的 Context Guard 部分，只总结文档说法。
 Turn 7-18: 每轮让 agent 读取一个小文件并总结 1 句，例如 docs/tools.md、docs/session_management.md、docs/gate-policy.md 等。
 Turn 19: 现在不要改代码。按 collect/mutate/verify 三阶段输出一个最终手测计划，并说明为什么不提交 git。
 ```
@@ -260,4 +260,3 @@ Expected:
 - If summary is not persisted in session metadata, resumed behavior depends on saved transcript and reconstruction logic.
 - The assistant should not falsely claim the value came from long-term memory.
 - If the value is unavailable after resume, the product needs persisted summary or transcript replay.
-
