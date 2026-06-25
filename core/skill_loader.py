@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 from functools import lru_cache
 import re
 import time
@@ -28,6 +29,25 @@ def _parse_list(value: Any) -> list[str]:
     if not text:
         return []
     return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _matches_tool_pattern(patterns: list[str], tool_name: str) -> bool:
+    return any(fnmatch.fnmatch(tool_name, pattern) for pattern in patterns)
+
+
+def _format_metadata_summary(skill_info: dict[str, Any]) -> str:
+    rows = []
+    for key in ["trigger", "do_not_trigger", "argument_hint"]:
+        value = skill_info.get(key)
+        if value:
+            rows.append(f"- {key}: {value}")
+    for key in ["allowed_tools", "blocked_tools", "tags"]:
+        value = skill_info.get(key) or []
+        if value:
+            rows.append(f"- {key}: {', '.join(value)}")
+    rows.append(f"- user_invocable: {bool(skill_info.get('user_invocable', True))}")
+    rows.append(f"- disable_auto_invoke: {bool(skill_info.get('disable_auto_invoke', False))}")
+    return "Metadata:\n" + "\n".join(rows)
 
 
 class LazySkillLoader:
@@ -144,8 +164,10 @@ class LazySkillLoader:
             normalized_mode = (mode or "").strip().lower()
             if normalized_mode == "help":
                 skill_content = self._load_skill_content(str(skill_info["md_path"]), float(skill_info["mtime"]))
+                metadata_summary = _format_metadata_summary(skill_info)
                 return (
                     f"========== [{skill_info['raw_name']} manual] ==========\n"
+                    f"{metadata_summary}\n\n"
                     f"{skill_content[:3000]}\n"
                     f"====================================\n"
                     "If this skill fits the task, call this same tool again with mode='run' "
@@ -154,6 +176,13 @@ class LazySkillLoader:
             if normalized_mode == "run":
                 if not command or not command.strip():
                     return "Error: command is required when mode='run'."
+                run_backend = "execute_office_shell"
+                blocked_tools = list(skill_info.get("blocked_tools") or [])
+                allowed_tools = list(skill_info.get("allowed_tools") or [])
+                if _matches_tool_pattern(blocked_tools, run_backend):
+                    return f"Error: this skill blocks {run_backend} via blocked-tools."
+                if allowed_tools and not _matches_tool_pattern(allowed_tools, run_backend):
+                    return f"Error: this skill allowed-tools does not include {run_backend}."
                 actual_cmd = command.replace("{baseDir}", f"skills/{skill_info['folder']}")
                 return execute_office_shell.invoke({"command": actual_cmd})
             return "Error: mode must be 'help' or 'run'."

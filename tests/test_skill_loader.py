@@ -137,6 +137,97 @@ def test_lazy_skill_loader_metadata_defaults_for_minimal_skill(tmp_path, monkeyp
     assert tool.skill_metadata["tags"] == []
 
 
+def test_lazy_skill_help_includes_metadata_summary(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    skills_dir = tmp_path / "office" / "skills"
+    skill_dir = skills_dir / "reporting"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        """---
+name: reporting
+description: Builds reports.
+trigger: user asks for reports
+tags:
+  - docs
+---
+
+# Reporting
+
+Manual body.
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", skills_dir)
+    skill_loader.clear_skill_cache()
+    [tool] = skill_loader.load_dynamic_skills(force_rescan=True)
+
+    result = tool.invoke({"mode": "help"})
+
+    assert "Metadata:" in result
+    assert "trigger: user asks for reports" in result
+    assert "tags: docs" in result
+    assert "# Reporting" in result
+
+
+def test_lazy_skill_run_rejects_blocked_shell_backend(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    skills_dir = tmp_path / "office" / "skills"
+    skill_dir = skills_dir / "no_shell"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        """---
+name: no_shell
+description: Does not allow shell.
+blocked-tools:
+  - execute_office_shell
+---
+
+# No Shell
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", skills_dir)
+    skill_loader.clear_skill_cache()
+    [tool] = skill_loader.load_dynamic_skills(force_rescan=True)
+
+    result = tool.invoke({"mode": "run", "command": "echo should-not-run"})
+
+    assert "Error:" in result
+    assert "blocked-tools" in result
+    assert "execute_office_shell" in result
+
+
+def test_lazy_skill_run_rejects_when_allowed_tools_excludes_shell(tmp_path, monkeypatch):
+    import core.skill_loader as skill_loader
+
+    skills_dir = tmp_path / "office" / "skills"
+    skill_dir = skills_dir / "read_only"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        """---
+name: read_only
+description: Only allows reads.
+allowed-tools:
+  - read_office_file
+---
+
+# Read Only
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(skill_loader, "SKILLS_DIR", skills_dir)
+    skill_loader.clear_skill_cache()
+    [tool] = skill_loader.load_dynamic_skills(force_rescan=True)
+
+    result = tool.invoke({"mode": "run", "command": "echo should-not-run"})
+
+    assert "Error:" in result
+    assert "allowed-tools" in result
+    assert "execute_office_shell" in result
+
+
 def test_two_stage_skill_runs_inside_react_loop(tmp_path, monkeypatch):
     import core.skill_loader as skill_loader
 
