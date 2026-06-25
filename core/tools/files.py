@@ -42,7 +42,7 @@ def list_office_files(relative_path: str = ".") -> str:
         A newline-separated directory listing.
     """
     try:
-        path = _safe_path(relative_path)
+        path = _safe_path(relative_path if relative_path and relative_path.strip() else ".")
         OFFICE_DIR.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             return f"Error: path does not exist: {relative_path}"

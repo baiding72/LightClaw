@@ -213,6 +213,14 @@ class ToolPolicy:
         metadata: dict[str, Any],
         reasons: list[str],
     ) -> ToolGateResult | None:
+        if _is_dynamic_skill_help(context, permission):
+            return self._result(
+                ToolGateDecision.ALLOW,
+                permission,
+                _with_reasons(reasons, "dynamic skill help 是只读手册加载，自动放行"),
+                metadata,
+            )
+
         if self.mode == "plan":
             if context.tool_name in WRITE_TOOLS:
                 return self._result(
@@ -462,6 +470,13 @@ def _contains_sensitive_memory(user_input: str, args: dict[str, Any]) -> bool:
 
 def _has_explicit_grant(context: ToolGateContext) -> bool:
     return str(context.args.get("_permission_grant", "")).lower() in {"true", "yes", "allow"}
+
+
+def _is_dynamic_skill_help(context: ToolGateContext, permission: ToolPermission) -> bool:
+    return (
+        permission.key == "tool:execute"
+        and str(context.args.get("mode", "")).strip().lower() == "help"
+    )
 
 
 def _with_reasons(existing: list[str], reason: str) -> str:

@@ -118,6 +118,19 @@ def test_plan_policy_allows_reads_and_denies_writes():
     assert "plan 模式" in write_result.reason
 
 
+def test_plan_policy_allows_dynamic_skill_help_but_not_run():
+    policy = ToolPolicy(mode="plan")
+
+    help_result = policy.evaluate(ToolGateContext(tool_name="metadata-demo", args={"mode": "help"}))
+    run_result = policy.evaluate(ToolGateContext(tool_name="metadata-demo", args={"mode": "run", "command": "echo ok"}))
+
+    assert help_result.decision == ToolGateDecision.ALLOW
+    assert help_result.permission.key == "tool:execute"
+    assert "skill help" in help_result.reason
+    assert run_result.decision == ToolGateDecision.ASK
+    assert run_result.permission.key == "tool:execute"
+
+
 def test_auto_policy_allows_read_only_tools():
     policy = ToolPolicy(mode="auto")
 

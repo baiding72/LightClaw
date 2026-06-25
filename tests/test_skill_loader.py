@@ -7,6 +7,7 @@ from pathlib import Path
 from langchain_core.messages import AIMessage
 
 from core.agent import create_agent_harness
+from core.policy import ToolPolicy
 from tests.test_mvp_learning import QueueChatModel
 
 
@@ -269,7 +270,7 @@ def test_two_stage_skill_runs_inside_react_loop(tmp_path, monkeypatch):
             AIMessage(content="skill completed"),
         ]
     )
-    harness = create_agent_harness(llm, tools=tools, max_turns=5)
+    harness = create_agent_harness(llm, tools=tools, max_turns=5, tool_policy=ToolPolicy(mode="off"))
 
     result = harness.run("use safe echo")
 
